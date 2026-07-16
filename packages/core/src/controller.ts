@@ -5,6 +5,7 @@ import { canonicalJson } from "./canonical-json.js";
 import { SqliteLedger } from "./ledger.js";
 import {
   authorizeAction,
+  normalizeNetworkReadDomain,
   permissionSetIsSubset,
   policyForMode,
   policyFromPermissionSet,
@@ -146,7 +147,8 @@ function emptyPermissionSet(): StructuredPermissionSet {
 function capabilitiesToPermissionSet(
   capabilities: string[],
   shellExecuteAllowlist: string[] = [],
-  denyAllShellExecution = false,
+  denyAll = false,
+  networkReadDomains: string[] = [],
 ): StructuredPermissionSet {
   const permissions = emptyPermissionSet();
   for (const capability of capabilities) {
@@ -164,7 +166,7 @@ function capabilitiesToPermissionSet(
         permissions.shell.inspect = true;
         break;
       case "shell.execute":
-        permissions.shell.executeAllowlist = denyAllShellExecution
+        permissions.shell.executeAllowlist = denyAll
           ? ["**"]
           : [...new Set(shellExecuteAllowlist)];
         break;
@@ -181,7 +183,9 @@ function capabilitiesToPermissionSet(
         permissions.browser.mutateState = true;
         break;
       case "network.read":
-        permissions.network.readDomains = ["localhost"];
+        permissions.network.readDomains = denyAll
+          ? ["**"]
+          : [...new Set(networkReadDomains)];
         break;
       case "external.write":
         permissions.network.externalWrite = true;
@@ -305,6 +309,7 @@ export interface StartRunInput {
     granted: string[];
     denied: string[];
     shellExecuteAllowlist?: string[];
+    networkReadDomains?: string[];
   };
   budgets?: {
     promptRevisions?: 0 | 1;
@@ -341,8 +346,12 @@ function assertStartInput(input: StartRunInput): void {
     throw new Error("Capability lists exceed the 256-item limit");
   }
   const shellExecuteAllowlist = input.authorization.shellExecuteAllowlist ?? [];
+  const networkReadDomains = input.authorization.networkReadDomains ?? [];
   if (shellExecuteAllowlist.length > 256) {
     throw new Error("Shell execute allowlist exceeds the 256-item limit");
+  }
+  if (networkReadDomains.length > 256) {
+    throw new Error("Network read domain allowlist exceeds the 256-item limit");
   }
   if (
     shellExecuteAllowlist.length > 0 &&
@@ -351,6 +360,24 @@ function assertStartInput(input: StartRunInput): void {
   ) {
     throw new Error(
       "Exact shell commands require granted shell.execute host capability",
+    );
+  }
+  if (
+    networkReadDomains.length > 0 &&
+    (!input.host.capabilities.includes("network.read") ||
+      !input.authorization.granted.includes("network.read"))
+  ) {
+    throw new Error(
+      "Network read domains require granted network.read host capability",
+    );
+  }
+  if (
+    networkReadDomains.some(
+      (domain) => normalizeNetworkReadDomain(domain) === null,
+    )
+  ) {
+    throw new Error(
+      "Network read domains must be exact DNS names or IP addresses without schemes, paths, ports, credentials, or wildcards",
     );
   }
   if (
@@ -602,6 +629,12 @@ const alwaysReadOnlyCapabilities = new Set([
   "subagent.spawn",
 ]);
 
+const potentiallyMutatingPlanCapabilities = new Set([
+  ...alwaysMutatingCapabilities,
+  "shell.execute",
+  "subagent.spawn",
+]);
+
 function requiresDirectEvidence(
   path: string,
   submissionType?: string,
@@ -771,11 +804,29 @@ function tracePermissionDecision(
   policyRefs: string[],
   rationaleSummary: string,
 ): TracePermissionDecision {
+  const capability =
+    typeof action.capability === "string" ? action.capability : "unknown";
+  const rawTarget =
+    typeof action.target === "string" ? action.target : "unknown";
+  let scope = rawTarget;
+  if (
+    (capability === "network.read" || capability === "external.write") &&
+    rawTarget !== "unknown"
+  ) {
+    try {
+      const parsed = new URL(
+        rawTarget.includes("://") ? rawTarget : `http://${rawTarget}`,
+      );
+      scope =
+        normalizeNetworkReadDomain(parsed.hostname) ?? "invalid_network_target";
+    } catch {
+      scope = "invalid_network_target";
+    }
+  }
   return {
     decision: allowed ? "allow" : "deny",
-    capability:
-      typeof action.capability === "string" ? action.capability : "unknown",
-    scope: typeof action.target === "string" ? action.target : "unknown",
+    capability,
+    scope,
     policyRefs,
     rationaleSummary,
   };
@@ -797,6 +848,15 @@ export class RunController {
     const runId = randomUUID();
     const repositoryRoot = realpathSync(input.repositoryRoot);
     const requestId = randomUUID();
+    const networkReadDomains = [
+      ...new Set(
+        (input.authorization.networkReadDomains ?? []).map((domain) =>
+          normalizeNetworkReadDomain(domain),
+        ),
+      ),
+    ]
+      .filter((domain): domain is string => domain !== null)
+      .sort();
     const envelopeId = runId;
     const run: RunRecord = {
       runId,
@@ -840,6 +900,8 @@ export class RunController {
         granted: capabilitiesToPermissionSet(
           input.authorization.granted,
           input.authorization.shellExecuteAllowlist,
+          false,
+          networkReadDomains,
         ),
         denied: capabilitiesToPermissionSet(
           input.authorization.denied,
@@ -2295,6 +2357,76 @@ export class RunController {
             : "WorkPlan must cover every TaskContract acceptance criterion",
         );
       }
+      const requiredVerificationStage =
+        run.requestedMode === "analyze_and_fix"
+          ? correctionControl !== null || this.analysisFixUnlocked(run.runId)
+            ? "completion"
+            : "diagnosis"
+          : null;
+      const requiredVerifications = Array.isArray(
+        contract.verificationRequirements,
+      )
+        ? (contract.verificationRequirements as Array<Record<string, unknown>>)
+            .filter((requirement) => requirement.required === true)
+            .filter(
+              (requirement) =>
+                requiredVerificationStage === null ||
+                requirement.stage === requiredVerificationStage,
+            )
+        : [];
+      const nodesById = new Map(nodes.map((node) => [node.id, node]));
+      const ancestorIdsByNode = new Map<string, Set<string>>();
+      for (const node of nodes) {
+        const pending = [...node.dependsOn];
+        const ancestors = new Set<string>();
+        while (pending.length > 0) {
+          const current = pending.pop()!;
+          if (ancestors.has(current)) continue;
+          ancestors.add(current);
+          pending.push(...(nodesById.get(current)?.dependsOn ?? []));
+        }
+        ancestorIdsByNode.set(node.id, ancestors);
+      }
+      const mutatingNodes = nodes.filter((node) =>
+        (node.allowedTools ?? []).some((capability) =>
+          potentiallyMutatingPlanCapabilities.has(capability),
+        ),
+      );
+      for (const requirement of requiredVerifications) {
+        const capability = requirement.capability;
+        const stage = requirement.stage;
+        const verificationNodes =
+          typeof capability === "string" &&
+          typeof stage === "string" &&
+          nodes.filter(
+            (node) =>
+              (node.requiredCapabilities ?? []).includes(capability) &&
+              (node.acceptanceCriteria ?? []).some(
+                (criterion) => criterionStages.get(criterion) === stage,
+              ),
+          );
+        if (!verificationNodes || verificationNodes.length === 0) {
+          throw new Error(
+            `Required verification ${String(requirement.id)} using ${String(capability)} is not scheduled by a same-stage WorkPlan node`,
+          );
+        }
+        if (stage === "completion") {
+          for (const verificationNode of verificationNodes) {
+            for (const mutatingNode of mutatingNodes) {
+              if (
+                verificationNode.id !== mutatingNode.id &&
+                !ancestorIdsByNode
+                  .get(verificationNode.id)
+                  ?.has(mutatingNode.id)
+              ) {
+                throw new Error(
+                  `Completion verification ${String(requirement.id)} must run after mutating node ${mutatingNode.id}`,
+                );
+              }
+            }
+          }
+        }
+      }
       return;
     }
 
@@ -2571,6 +2703,59 @@ export class RunController {
         }
       }
       if (body.status === "completed") {
+        const finalMutatingActionIndex = actions.findLastIndex(
+          (action) => action.status === "completed" && action.mutating === true,
+        );
+        if (finalMutatingActionIndex >= 0) {
+          const contract = this.latestBody(run.runId, "TaskContract")!;
+          const completionCriterionIds = new Set(
+            Array.isArray(contract.acceptanceCriteria)
+              ? contract.acceptanceCriteria
+                  .filter(
+                    (criterion): criterion is Record<string, unknown> =>
+                      typeof criterion === "object" && criterion !== null,
+                  )
+                  .filter((criterion) => criterion.stage === "completion")
+                  .map((criterion) => criterion.id)
+                  .filter((id): id is string => typeof id === "string")
+              : [],
+          );
+          const nodeOwnsCompletion = (node.acceptanceCriteria ?? []).some(
+            (criterion) => completionCriterionIds.has(criterion),
+          );
+          const completionVerifications = Array.isArray(
+            contract.verificationRequirements,
+          )
+            ? (
+                contract.verificationRequirements as Array<
+                  Record<string, unknown>
+                >
+              ).filter(
+                (requirement) =>
+                  requirement.required === true &&
+                  requirement.stage === "completion" &&
+                  typeof requirement.capability === "string" &&
+                  nodeOwnsCompletion &&
+                  (node.requiredCapabilities ?? []).includes(
+                    requirement.capability,
+                  ),
+              )
+            : [];
+          for (const requirement of completionVerifications) {
+            const verificationActionIndex = actions.findIndex(
+              (action, index) =>
+                index > finalMutatingActionIndex &&
+                action.capability === requirement.capability &&
+                action.status === "completed" &&
+                action.mutating === false,
+            );
+            if (verificationActionIndex < 0) {
+              throw new Error(
+                `Completion verification ${String(requirement.id)} must run after the final mutating action`,
+              );
+            }
+          }
+        }
         for (const capability of node.requiredCapabilities ?? []) {
           if (
             !actions.some(
@@ -2921,6 +3106,33 @@ export class RunController {
                     ),
                 );
               });
+          const stageCriterionIds = new Set(
+            criterionRecords
+              .filter((criterion) => criterion.stage === requirement.stage)
+              .map((criterion) => criterion.id)
+              .filter((id): id is string => typeof id === "string"),
+          );
+          const eligibleNodeIds = new Set(
+            Array.isArray(currentPlan.nodes)
+              ? currentPlan.nodes
+                  .filter(
+                    (node): node is Record<string, unknown> =>
+                      typeof node === "object" && node !== null,
+                  )
+                  .filter((node) =>
+                    stringArray(node.requiredCapabilities).includes(
+                      String(requirement.capability),
+                    ),
+                  )
+                  .filter((node) =>
+                    stringArray(node.acceptanceCriteria).some((criterion) =>
+                      stageCriterionIds.has(criterion),
+                    ),
+                  )
+                  .map((node) => node.id)
+                  .filter((id): id is string => typeof id === "string")
+              : [],
+          );
           const capabilityObserved =
             retainedDiagnosis ||
             expectedResults
@@ -2930,27 +3142,43 @@ export class RunController {
                   ? this.ledger.getArtifact(run.runId, artifactId)?.body
                   : null,
               )
-              .some(
-                (workResult) =>
-                  typeof workResult === "object" &&
-                  workResult !== null &&
-                  Array.isArray(
-                    (workResult as { actions?: unknown }).actions,
-                  ) &&
-                  (
-                    workResult as {
-                      actions: Array<Record<string, unknown>>;
-                    }
-                  ).actions.some(
-                    (action) =>
-                      action.capability === requirement.capability &&
-                      action.status === "completed" &&
-                      action.mutating === false &&
-                      stringArray(action.evidenceRefs).some((reference) =>
-                        verificationEvidence.has(reference),
-                      ),
-                  ),
-              );
+              .some((workResult) => {
+                if (
+                  typeof workResult !== "object" ||
+                  workResult === null ||
+                  !Array.isArray((workResult as { actions?: unknown }).actions)
+                ) {
+                  return false;
+                }
+                const workResultRecord = workResult as Record<string, unknown>;
+                if (
+                  typeof workResultRecord.nodeId !== "string" ||
+                  !eligibleNodeIds.has(workResultRecord.nodeId)
+                ) {
+                  return false;
+                }
+                const actions = (
+                  workResultRecord as {
+                    actions: Array<Record<string, unknown>>;
+                  }
+                ).actions;
+                const finalMutatingActionIndex = actions.findLastIndex(
+                  (action) =>
+                    action.status === "completed" && action.mutating === true,
+                );
+                return actions.some(
+                  (action, index) =>
+                    action.capability === requirement.capability &&
+                    action.status === "completed" &&
+                    action.mutating === false &&
+                    (requirement.stage !== "completion" ||
+                      finalMutatingActionIndex < 0 ||
+                      index > finalMutatingActionIndex) &&
+                    stringArray(action.evidenceRefs).some((reference) =>
+                      verificationEvidence.has(reference),
+                    ),
+                );
+              });
           if (!capabilityObserved) {
             throw new Error(
               `Passed verification ${String(requirement.id)} lacks a completed capability action`,

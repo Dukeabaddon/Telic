@@ -1,95 +1,156 @@
 # Telic
 
-> Turn a rough coding request into a permission-bounded, evidence-backed workflow.
+> Rough request in. Evidence-backed workflow out.
 
-Telic is a local MCP control plane for coding agents. It helps an active coding
-host turn an ambiguous request into a grounded plan, inspectable work, verified
-results, and an honest final report.
-
-**Status:** executable local preview. The npm package provides the portable
-`telic` CLI and STDIO MCP server. Codex has the reference source plugin. Six
-additional host packs are available as experimental source adapters. Telic does
-not call a model API, require a hosted service, or claim that it can intercept
-every action taken by an IDE.
+[![npm](https://img.shields.io/npm/v/telic-mcp?label=telic-mcp)](https://www.npmjs.com/package/telic-mcp)
+![Node.js](https://img.shields.io/badge/Node.js-%3E%3D24.15.0-339933)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ![Telic workflow: Prompt, Restructure, Evaluate, Act, Verify, Report](assets/telic-hero.png)
+
+Telic is an opt-in workflow plugin for coding agents. It turns an ambiguous
+request into a permission-bounded task, guides the work, checks the evidence,
+and reports only what can be supported.
+
+**Status:** public preview. The Codex plugin is installable from this GitHub
+repository. The portable CLI and local STDIO MCP server are published as
+[`telic-mcp`](https://www.npmjs.com/package/telic-mcp). Telic uses the active
+coding host's model; it has no hosted model service or separate API key.
 
 ## The five-second idea
 
 **Prompt. Restructure. Evaluate. Act. Verify. Report.**
 
-You give your coding host a rough request. Telic helps the host frame the
-intent, compile a typed task contract, review it once, plan scoped work, collect
-evidence, check the result, and report what is actually supported.
+Give Codex a rough request. Telic grounds it in the repository, converts it into
+a typed work contract, checks permissions before execution, and audits the
+result before release.
 
-The five roles are logical responsibilities performed by the active host model;
-they are not five hosted Telic models. The deterministic controller enforces
-schemas, phases, permissions, references, budgets, and terminal claims.
+## Try Telic in two minutes
 
-## Why Telic exists
+You need Node.js `>=24.15.0`, Git, and a current
+[Codex CLI](https://learn.chatgpt.com/docs/codex/cli) with plugin support. Git
+is used to fetch the public marketplace repository.
 
-Vague requests are useful starting points but poor execution contracts:
+```bash
+node --version
+git --version
+codex --version
+codex plugin marketplace add Dukeabaddon/Telic --json
+codex plugin add telic@dukeabaddon-telic --json
+codex plugin list --json
+codex mcp list --json
+```
 
-> “Investigate why the project is not talking to the API.”
+If `codex --version` says the command is missing, the IDE extension may be
+installed without exposing the CLI on your shell `PATH`. Complete the official
+[Codex CLI setup](https://learn.chatgpt.com/docs/codex/cli), then reopen the
+terminal before continuing.
 
-Telic preserves the user's intent while making the missing pieces visible:
+Restart Codex or reload the IDE extension, then begin a new chat. The plugin
+already bundles Telic's MCP configuration; do not add a second Telic server
+manually.
 
-- what the task means and what is still unknown;
-- which repository context was selected and why;
-- whether the user requested analysis, a report, a plan, a fix, or both;
-- which tools and paths are authorized;
-- what evidence proves each acceptance criterion; and
-- whether the final result is complete, partial, blocked, or unverified.
+Start with the same short human-facing prefix in any host:
 
-## How a run works
+```text
+Telic: this project keeps recommending the same result. I do not know whether
+the ranking is broken or the data is biased. Analyze only.
+```
+
+The Codex skill matches this only because Telic was explicitly requested by
+name. Select Telic through `/skills` or use `$telic:telic` as the guaranteed
+technical fallback. A question about Telic itself does not start the workflow.
+
+`Analyze only` is ordinary language with a precise safety effect: Telic may
+investigate, but it must not edit files or mutate runtime state.
+
+### What you should see
+
+- the request preserved as immutable input;
+- relevant repository evidence selected with reasons;
+- an explicit mode and permission ceiling;
+- a bounded plan whose required checks are executable; and
+- a final report separating proven facts, changes, and unresolved items.
+
+## Why Telic
+
+| Without a workflow contract                 | With Telic                                                 |
+| ------------------------------------------- | ---------------------------------------------------------- |
+| A vague prompt can silently expand in scope | Intent, scope, non-goals, and permissions are explicit     |
+| “Done” may be only an agent claim           | Completion claims must reference recorded evidence         |
+| Review loops can continue indefinitely      | One contract revision and one shared remediation are bound |
+| Missing tools can produce confident guesses | Unavailable verification stays partial or unverified       |
+
+Telic does not replace the coding agent. It gives the agent a workflow spine.
+
+## When to use Telic
+
+Telic never needs to run for every prompt. Activate it explicitly for work where
+the extra structure pays for itself:
+
+- ambiguous diagnoses;
+- repository-wide or risky changes;
+- security-sensitive work;
+- analysis followed by a conditional fix; or
+- tasks needing an inspectable evidence trail.
+
+Skip Telic for simple questions, formatting, typo fixes, and obvious one-file
+edits. The portable request form is `Telic: <your request>`. In Codex, `/skills`
+or `$telic:telic` provides deterministic manual selection; a literal `/telic`
+is not the Codex skill syntax.
+
+## How it works
 
 ```mermaid
 flowchart LR
-    U[Developer request] --> F[Frame intent]
-    F --> C[Compile task contract]
-    C --> R[Review once]
-    R --> P[Plan scoped work]
-    P --> E[Execute or inspect]
-    E --> Q[Quality review]
-    Q --> A[Release audit]
-    A --> O[Evidence-backed report]
+    U["Rough request"] --> F["Frame intent"]
+    F --> C["Compile contract"]
+    C --> R["Review once"]
+    R --> P["Plan scoped work"]
+    P --> E["Inspect or execute"]
+    E --> Q["Verify evidence"]
+    Q --> A["Audit release"]
+    A --> O["Report honestly"]
     R -. one revision .-> C
-    Q -. one shared remediation .-> P
+    Q -. one remediation .-> P
 ```
 
-Telic asks one user-facing clarification question only when repository evidence
-cannot resolve a material user-owned decision. A broader authority request
-requires a new run. It does not run an unlimited autonomous loop.
+The five agents in the design are logical roles: scenario author, task compiler,
+quality controller, executor, and release auditor. The active host model can
+perform them serially in one session. Telic itself does not make five model API
+calls or claim hidden chain-of-thought.
 
-## What is included
+## Permission modes
 
-- `telic-mcp` — npm-distributed `telic` CLI and local STDIO MCP server.
-- `@telic/protocol` — strict Zod artifact schemas and cross-field contracts.
-- `@telic/core` — deterministic state machine, permissions, budgets, SQLite
-  metadata, and immutable content-addressed artifact bodies.
-- `@telic/context` — bounded Git/ripgrep/filesystem grounding with path,
-  symlink, duplicate, size, and heuristic secret controls.
-- `@telic/mcp` — seven-tool local STDIO MCP server plus the portable
-  `telic_workflow` prompt.
-- `@telic/cli` — local `doctor`, `status`, `trace`, `artifact`, and `mcp`
-  diagnostics.
-- `plugins/telic` — Codex skill, marketplace metadata, MCP configuration, and
-  standalone bundled server.
-- `adapters/` — source-preview packs for Claude Code, Antigravity, Cursor, Kiro,
-  Cline, and Roo Code.
+| Mode              | Outcome                                     | Mutation boundary                    |
+| ----------------- | ------------------------------------------- | ------------------------------------ |
+| `report_only`     | Explain supplied facts or existing results  | No new investigation or mutation     |
+| `plan_only`       | Produce an actionable plan                  | Do not execute it                    |
+| `analyze_only`    | Investigate and diagnose                    | Do not mutate files or runtime state |
+| `fix_only`        | Apply a known, explicitly scoped correction | Change only the approved scope       |
+| `analyze_and_fix` | Diagnose, then fix a supported root cause   | Mutation starts only after diagnosis |
 
-## Quick start with npm
+Missing permission is denial. Telic does not silently broaden a request.
 
-Requirements: Node.js `>=24.15.0`. Git and ripgrep improve discovery but are
-optional.
+## Installation choices
 
-Run without installing globally:
+| Path                           | What it installs                           | Status                     |
+| ------------------------------ | ------------------------------------------ | -------------------------- |
+| Codex Git marketplace          | Telic skill plus bundled local MCP server  | Recommended public preview |
+| npm package `telic-mcp`        | Portable CLI and STDIO MCP tools only      | Published                  |
+| Source adapters in `adapters/` | Host-specific skill/configuration overlays | Experimental               |
+
+### Portable MCP and CLI
+
+Use this route for custom MCP clients or diagnostics. It does **not** install
+the Telic workflow skill into Codex.
 
 ```bash
-npx telic-mcp doctor --json
+npx -y telic-mcp doctor --json
 ```
 
-Use the bundled STDIO MCP server from any MCP-compatible host:
+Run that command in the target project, not inside a Telic source checkout. A
+generic STDIO MCP client can launch:
 
 ```json
 {
@@ -105,177 +166,121 @@ Use the bundled STDIO MCP server from any MCP-compatible host:
 }
 ```
 
-Set `TELIC_STATE_DIR` when you want run state outside the default user state
-directory.
+MCP connectivity exposes Telic's deterministic tools and portable prompt. A
+host still needs a skill, command, or equivalent driver to follow the complete
+workflow. See [Installation](docs/INSTALLATION.md).
 
-## Build from source
+## Host and platform compatibility
 
-Requirements: Node.js `>=24.15.0` and npm. Git and ripgrep improve discovery but
-are optional.
+Use `Telic: <your request>` as the portable human intent. When a host does not
+support description-based skill matching, use its native fallback:
 
-```bash
-git clone https://github.com/Dukeabaddon/Telic.git
-cd Telic
-npm ci
-npm run build
-npm test
-node packages/cli/dist/bin.js doctor --json
-```
+| Host             | Native fallback                    | Current evidence                           |
+| ---------------- | ---------------------------------- | ------------------------------------------ |
+| Codex            | `/skills` or `$telic:telic`        | Reference plugin; install and smoke tested |
+| Claude Code      | `/telic:telic`                     | Source adapter; lifecycle not certified    |
+| Antigravity CLI  | `/telic`                           | Source adapter; lifecycle not certified    |
+| Cursor           | `/telic`                           | Source adapter; lifecycle not certified    |
+| Kiro CLI         | `/agent swap telic`, then `/telic` | Source adapter; lifecycle not certified    |
+| Cline / Roo Code | `/telic`                           | Source adapters; lifecycle not certified   |
 
-The doctor command should return JSON with `"ok": true`. This builds Telic; the
-next section connects it to Codex. Downloading a source archive is also valid
-when Git is unavailable.
+An editor and its AI extensions are separate hosts. For example, the Codex
+extension inside Antigravity can use the Codex plugin; Antigravity's native
+Agent panel needs its own adapter.
 
-The normal state directory is outside the repository:
+- Linux x86-64 is the active development platform.
+- Ubuntu and macOS are CI targets, pending clean lifecycle certification.
+- Native Windows is unsupported; WSL is not certified.
+
+See [adapter details](docs/ADAPTERS.md) and
+[current limitations](docs/STATUS.md) before relying on another host.
+
+## Built with Codex during Build Week
+
+Codex helped turn the initial product discussion into an executable protocol,
+controller invariants, adversarial tests, a packaged local MCP server, host
+adapter checks, and release documentation.
+
+The important engineering decisions remained explicit and reviewable:
+
+- preserve the original request;
+- require explicit Telic activation;
+- deny missing permission;
+- bound review and remediation loops;
+- keep the MCP runtime model-free; and
+- require evidence before final claims.
+
+No model-version claim is made here without separately preserved session proof.
+
+## Security and local data
+
+Telic validates artifacts submitted through its MCP server. It cannot intercept
+shell, editor, browser, runtime, network, or subagent actions a host performs
+outside that server. Host sandboxing and user approvals remain authoritative.
+
+Selected source and evidence are stored exactly in a local, content-addressed
+ledger. Hashing provides identity and integrity; it is not anonymization. Secret
+filtering is heuristic. Do not use Telic on repositories whose contents you are
+unwilling to store locally.
+
+Default state lives outside the repository:
 
 ```text
 ${XDG_STATE_HOME:-$HOME/.local/state}/telic/repositories/<repository-hash>/
 ```
 
-For an isolated run, set `TELIC_STATE_DIR` to a directory outside the project.
+Read [Security](SECURITY.md) and [Privacy](PRIVACY.md) before using sensitive
+repositories.
 
-## Install the Codex plugin locally
-
-Build the repository, then add its local marketplace:
-
-```bash
-codex plugin marketplace add "$PWD/.agents/plugins" --json
-codex plugin add telic@personal --json
-codex plugin list --json
-codex mcp list --json
-```
-
-Restart Codex. Open `/skills` and select Telic, or mention the installed skill
-directly:
+## Architecture for developers
 
 ```text
-Use $telic:telic to investigate this repository. Analyze only; do not change files.
-```
-
-This is a local development installation. It does not publish Telic to a public
-plugin directory. See [installation](docs/INSTALLATION.md).
-
-## Advanced: connect a custom MCP client
-
-The bundled process is a local STDIO MCP server. A compatible host normally
-launches it and communicates through stdin/stdout; it is not a web server or an
-interactive terminal application. Running this command by hand will wait for
-an MCP client until you stop it with `Ctrl-C`.
-
-```bash
-TELIC_REPOSITORY_ROOT="$PWD" \
-TELIC_STATE_DIR="$HOME/.local/state/telic-demo" \
-node plugins/telic/dist/mcp/server.js
-```
-
-Equivalent client configuration uses absolute paths:
-
-```json
-{
-  "mcpServers": {
-    "telic": {
-      "command": "node",
-      "args": ["/absolute/path/to/Telic/plugins/telic/dist/mcp/server.js"],
-      "env": {
-        "TELIC_REPOSITORY_ROOT": "/absolute/path/to/target-project",
-        "TELIC_STATE_DIR": "/absolute/path/outside-the-project/telic-state"
-      }
-    }
-  }
-}
-```
-
-The server uses stdout only for MCP protocol traffic and stderr for diagnostics.
-It does not open a listening port or require a separate database service.
-This path is mainly for adapter development, transport debugging, and custom
-MCP clients. MCP connectivity alone does not make a host follow Telic's full
-semantic workflow. See the [source-preview demo](docs/DEMO.md).
-
-## Choose your host
-
-One workflow name has different host-native spellings. Use `/telic` where the
-host supports that form. In Codex, `/skills` opens the skill selector and
-`$telic:telic` explicitly invokes the installed skill; a literal `/telic` is not
-the Codex skill syntax.
-
-| Active coding host | Activation                         | Source pack                        | Current evidence                                         |
-| ------------------ | ---------------------------------- | ---------------------------------- | -------------------------------------------------------- |
-| Codex              | `/skills` or `$telic:telic`        | `plugins/telic/`                   | Reference source plugin; local validation and smoke test |
-| Claude Code        | `/telic:telic`                     | `adapters/claude-code/telic/`      | Config and STDIO smoke test; lifecycle untested          |
-| Antigravity CLI    | `/telic`                           | `adapters/antigravity/telic/`      | CLI schema and preview-root smoke test                   |
-| Cursor             | `/telic`                           | `adapters/cursor/project/.cursor/` | Project config and STDIO smoke test                      |
-| Kiro CLI           | `/agent swap telic`, then `/telic` | `adapters/kiro/project/.kiro/`     | CLI schema and STDIO smoke test                          |
-| Cline              | `/telic`                           | `adapters/cline/project/.cline/`   | Project config smoke test; Skills must be enabled        |
-| Roo Code           | `/telic`                           | `adapters/roo-code/project/.roo/`  | Legacy project adapter; confirm the installed version    |
-
-These are source-preview claims, not marketplace or lifecycle certification.
-See [host adapter details](adapters/README.md).
-
-An editor shell does not make its AI extensions share agents or MCP tools. For
-example, Telic installed in the Codex extension inside Antigravity belongs to
-Codex; Antigravity's native Agent panel needs its own adapter. Any extension can
-use Telic when that extension can launch a local STDIO MCP server and activate a
-skill, command, rule, or MCP prompt. Cloud-only agents cannot reach a process on
-the user's laptop unless their sandbox can install it or a remote transport is
-provided.
-
-## Platform status
-
-| Platform         | Current claim                                                                   |
-| ---------------- | ------------------------------------------------------------------------------- |
-| Linux x86-64     | Active development and local verification platform                              |
-| Ubuntu and macOS | CI targets in the current candidate; compatibility requires a passing clean run |
-| Native Windows   | Not supported yet; filesystem safety and path behavior need dedicated work      |
-| WSL              | Not certified; treat it as a separate lifecycle target                          |
-
-Node.js is cross-platform, but runtime availability alone does not prove Telic's
-filesystem, permissions, plugin lifecycle, and cleanup behavior on that platform.
-
-## Security boundary
-
-Telic validates artifacts submitted through its MCP server. It does not intercept
-shell, editor, browser, runtime, network, or subagent actions a host performs
-directly outside Telic. Host sandboxing and user approvals remain the authority
-for those native actions.
-
-Run state can contain proprietary source and evidence. Read [SECURITY.md](SECURITY.md)
-before using Telic with sensitive repositories.
-
-## Repository map
-
-```text
-packages/protocol/   schemas and artifact contracts
-packages/core/       controller, permissions, ledger, state machine
-packages/context/    bounded repository grounding
-packages/mcp/        local MCP service
-packages/cli/        diagnostics and ledger inspection
+packages/protocol/   strict schemas and artifact contracts
+packages/core/       controller, permissions, ledger, and state machine
+packages/context/    bounded repository grounding and safety controls
+packages/mcp/        local model-free MCP service
+packages/cli/        doctor and ledger diagnostics
 plugins/telic/       Codex skill and bundled MCP server
-adapters/            experimental host-native source packs
-test/                cross-package conformance and plugin smoke tests
-docs/                user, protocol, architecture, and quality references
+adapters/            experimental host-specific source packs
+test/                cross-package conformance and smoke tests
 ```
 
-## Documentation
+The controller currently accepts deterministic serial WorkPlans. Browser and
+DevTools providers, graph retrieval, semantic compression, visual inspection,
+and host-wide tool interception are not shipped.
+
+## Develop and verify
+
+```bash
+git clone https://github.com/Dukeabaddon/Telic.git
+cd Telic
+npm ci
+npm run check
+node packages/cli/dist/bin.js doctor --json
+```
+
+`npm run check` checks formatting, builds, runs threshold-enforced coverage,
+validates the Codex assets and marketplace, and validates every source adapter. See
+[Contributing](CONTRIBUTING.md) for the artifact-first workflow.
+
+## Documentation and support
 
 - [Installation](docs/INSTALLATION.md)
-- [API reference](docs/API.md)
+- [Demo guide](docs/DEMO.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Protocol](docs/PROTOCOL.md)
-- [Quality model](docs/QUALITY.md)
-- [Adapter status](docs/ADAPTERS.md)
+- [API reference](docs/API.md)
 - [Example run](docs/EXAMPLE_RUN.md)
-- [Source-preview demo](docs/DEMO.md)
-- [Current status and limitations](docs/STATUS.md)
-- [Third-party dependencies](docs/THIRD_PARTY.md)
+- [Current status](docs/STATUS.md)
 - [Contributing](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
+- [Privacy](PRIVACY.md)
+- [Terms](TERMS.md)
 
-## Help and contributing
-
-Use GitHub Issues for reproducible, non-sensitive defects. Do not post secrets,
-private source, or security proofs publicly. Read [SECURITY.md](SECURITY.md) for
-the current reporting limitation and [CONTRIBUTING.md](CONTRIBUTING.md) before
-submitting a change.
+Use [GitHub Issues](https://github.com/Dukeabaddon/Telic/issues) for
+reproducible, non-sensitive defects. Do not publish secrets or private source in
+an issue.
 
 ## License
 
-Telic is released under the MIT License. See [LICENSE](LICENSE).
+Telic is released under the [MIT License](LICENSE).

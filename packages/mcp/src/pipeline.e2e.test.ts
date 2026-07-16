@@ -915,11 +915,11 @@ describe("serial Telic pipeline", () => {
         id: "correction-order-01",
         targetCriterionIds: ["AC-2"],
         objective: "Apply the contract-bounded repository correction.",
-        allowedCapabilities: ["repository.write"],
+        allowedCapabilities: ["repository.write", "repository.read"],
         permissions: {
           ...structuredClone(NO_PERMISSIONS),
           repository: {
-            read: [],
+            read: ["**"],
             write: ["**"],
             delete: [],
           },
@@ -948,9 +948,13 @@ describe("serial Telic pipeline", () => {
     fixPlan.nodes[0].inputRefs.push(
       `artifact://${harness.started.run.runId}/${diagnosisReview.id}`,
     );
-    fixPlan.nodes[0].allowedTools = ["repository.write"];
-    fixPlan.nodes[0].requiredCapabilities = ["repository.write"];
+    fixPlan.nodes[0].allowedTools = ["repository.write", "repository.read"];
+    fixPlan.nodes[0].requiredCapabilities = [
+      "repository.write",
+      "repository.read",
+    ];
     fixPlan.nodes[0].permissions = structuredClone(NO_PERMISSIONS);
+    fixPlan.nodes[0].permissions.repository.read = ["**"];
     fixPlan.nodes[0].permissions.repository.write = ["**"];
     const fix = harness.submit("WorkPlan", "quality_controller", fixPlan);
     expect(fix.nextAction).toMatchObject({

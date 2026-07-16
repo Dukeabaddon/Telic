@@ -3307,8 +3307,8 @@ var require_utils = __commonJS({
     var HOST_DELIMS = { "@": "%40", "/": "%2F", "?": "%3F", "#": "%23", ":": "%3A" };
     var HOST_DELIM_RE = /[@/?#:]/g;
     var HOST_DELIM_NO_COLON_RE = /[@/?#]/g;
-    function reescapeHostDelimiters(host, isIP) {
-      const re = isIP ? HOST_DELIM_NO_COLON_RE : HOST_DELIM_RE;
+    function reescapeHostDelimiters(host, isIP2) {
+      const re = isIP2 ? HOST_DELIM_NO_COLON_RE : HOST_DELIM_RE;
       re.lastIndex = 0;
       return host.replace(re, (ch) => HOST_DELIMS[ch]);
     }
@@ -3790,7 +3790,7 @@ var require_fast_uri = __commonJS({
         fragment: void 0
       };
       let malformedAuthorityOrPort = false;
-      let isIP = false;
+      let isIP2 = false;
       if (options.reference === "suffix") {
         if (options.scheme) {
           uri = options.scheme + ":" + uri;
@@ -3820,9 +3820,9 @@ var require_fast_uri = __commonJS({
           if (ipv4result === false) {
             const ipv6result = normalizeIPv6(parsed.host);
             parsed.host = ipv6result.host.toLowerCase();
-            isIP = ipv6result.isIPV6;
+            isIP2 = ipv6result.isIPV6;
           } else {
-            isIP = true;
+            isIP2 = true;
           }
         }
         if (parsed.scheme === void 0 && parsed.userinfo === void 0 && parsed.host === void 0 && parsed.port === void 0 && parsed.query === void 0 && !parsed.path) {
@@ -3839,7 +3839,7 @@ var require_fast_uri = __commonJS({
         }
         const schemeHandler = getSchemeHandler(options.scheme || parsed.scheme);
         if (!options.unicodeSupport && (!schemeHandler || !schemeHandler.unicodeSupport)) {
-          if (parsed.host && (options.domainHost || schemeHandler && schemeHandler.domainHost) && isIP === false && nonSimpleDomain(parsed.host)) {
+          if (parsed.host && (options.domainHost || schemeHandler && schemeHandler.domainHost) && isIP2 === false && nonSimpleDomain(parsed.host)) {
             try {
               parsed.host = new URL("http://" + parsed.host).hostname;
             } catch (e) {
@@ -3853,7 +3853,7 @@ var require_fast_uri = __commonJS({
               parsed.scheme = unescape(parsed.scheme);
             }
             if (parsed.host !== void 0) {
-              parsed.host = reescapeHostDelimiters(unescape(parsed.host), isIP);
+              parsed.host = reescapeHostDelimiters(unescape(parsed.host), isIP2);
             }
           }
           if (parsed.path) {
@@ -31398,39 +31398,77 @@ async function fingerprintRepository(root, inventoryPaths, contentHashes) {
 // packages/context/dist/ranking.js
 var STOP_WORDS = /* @__PURE__ */ new Set([
   "a",
+  "about",
   "an",
   "and",
   "are",
+  "as",
+  "at",
+  "be",
+  "by",
   "can",
   "check",
+  "code",
+  "com",
   "could",
+  "do",
+  "does",
+  "file",
+  "fix",
   "for",
   "from",
+  "have",
+  "how",
   "in",
+  "investigate",
   "is",
   "it",
+  "me",
+  "my",
   "of",
   "on",
+  "or",
   "please",
   "project",
+  "report",
+  "review",
+  "so",
+  "task",
+  "that",
   "the",
   "this",
   "to",
+  "use",
+  "using",
+  "we",
+  "what",
+  "when",
+  "where",
+  "who",
   "why",
+  "will",
   "with",
+  "would",
   "you"
 ]);
 function lexicalCompare(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
+function normalizeToken(token) {
+  if (token.length > 4 && token.endsWith("s") && !token.endsWith("ss") && !token.endsWith("is") && !token.endsWith("us")) {
+    return token.slice(0, -1);
+  }
+  return token;
+}
+function tokens(value) {
+  const separated = value.replaceAll(/([a-z0-9])([A-Z])/g, "$1 $2");
+  return (separated.toLowerCase().match(/[a-z0-9]+/gu) ?? []).map(normalizeToken);
+}
 function requestTerms(request) {
-  const matches = request.toLowerCase().match(/[a-z0-9][a-z0-9._/-]*/gu) ?? [];
   const terms = /* @__PURE__ */ new Set();
-  for (const match of matches) {
-    for (const term of match.split(/[./_-]+/u)) {
-      if (term.length >= 2 && !STOP_WORDS.has(term)) {
-        terms.add(term);
-      }
+  for (const term of tokens(request)) {
+    if (term.length >= 2 && !STOP_WORDS.has(term)) {
+      terms.add(term);
     }
   }
   return [...terms].sort(lexicalCompare);
@@ -31441,26 +31479,33 @@ function requestPathHints(request) {
     ...new Set(matches.map((match) => match.replace(/^\.\//u, "").toLowerCase()))
   ].sort(lexicalCompare);
 }
+function isRootProjectMetadata(path) {
+  if (path.includes("/"))
+    return false;
+  return path === "package.json" || path === "package-lock.json" || path === "pyproject.toml" || path === "cargo.toml" || path === "go.mod" || path === "readme" || path.startsWith("readme.") || path === "tsconfig.json" || path.startsWith("tsconfig.") && path.endsWith(".json");
+}
 function rankCandidates(paths, request, activePaths) {
   const terms = requestTerms(request);
   const pathHints = requestPathHints(request);
   const active = new Set(activePaths.map((path) => path.toLowerCase()));
   const ranked = paths.map((path) => {
     const lowerPath = path.toLowerCase();
-    const basename2 = lowerPath.split("/").at(-1) ?? lowerPath;
+    const pathTokens = new Set(tokens(path));
+    const basenameTokens = new Set(tokens(path.split("/").at(-1) ?? path));
     const instruction = isInstructionPath(path);
     const activeExact = active.has(lowerPath);
     const activeAncestor = [...active].some((activePath) => activePath.startsWith(`${lowerPath}/`) || lowerPath.startsWith(`${activePath}/`));
-    const matchingHints = pathHints.filter((hint) => lowerPath === hint || lowerPath.endsWith(`/${hint}`) || lowerPath.includes(hint));
-    const matchingTerms = terms.filter((term) => lowerPath.includes(term));
-    const basenameTerms = matchingTerms.filter((term) => basename2.includes(term));
+    const matchingHints = pathHints.filter((hint) => lowerPath === hint || lowerPath.endsWith(`/${hint}`));
+    const matchingTerms = terms.filter((term) => pathTokens.has(term));
+    const basenameTerms = matchingTerms.filter((term) => basenameTokens.has(term));
+    const projectMetadata = isRootProjectMetadata(lowerPath);
     const pinned = instruction || activeExact;
     let score = pinned ? 1e6 : 0;
     score += activeExact ? 5e4 : activeAncestor ? 1e4 : 0;
     score += matchingHints.length * 5e3;
     score += basenameTerms.length * 250;
     score += (matchingTerms.length - basenameTerms.length) * 75;
-    score += /(?:^|\/)(?:readme|package|tsconfig|pyproject|cargo|go\.mod)/u.test(lowerPath) ? 20 : 0;
+    score += projectMetadata ? 20 : 0;
     let reason;
     if (instruction) {
       reason = "Applicable repository instruction source pinned by policy.";
@@ -31472,6 +31517,8 @@ function rankCandidates(paths, request, activePaths) {
       reason = `Path matches request terms: ${matchingTerms.slice(0, 5).join(", ")}.`;
     } else if (activeAncestor) {
       reason = "Path is adjacent to an active host path.";
+    } else if (projectMetadata) {
+      reason = "Root project metadata selected for bounded baseline context.";
     } else {
       reason = "Repository source selected by the deterministic budget fallback.";
     }
@@ -31495,6 +31542,7 @@ var HARD_LIMITS = {
 };
 var REQUEST_CHARACTER_LIMIT = 32768;
 var BINARY_PREFIX_BYTES = 8192;
+var MAX_ZERO_SCORE_FALLBACK_FILES = 8;
 function sha2562(value) {
   return `sha256:${createHash2("sha256").update(value).digest("hex")}`;
 }
@@ -31681,7 +31729,12 @@ async function groundRepository(input) {
   const hashesByPath = /* @__PURE__ */ new Map();
   const selectedHashes = /* @__PURE__ */ new Set();
   let selectedBytes = 0;
+  let selectedZeroScoreFallbacks = 0;
   for (const candidate of ranked) {
+    if (!candidate.pinned && candidate.score === 0 && selectedZeroScoreFallbacks >= MAX_ZERO_SCORE_FALLBACK_FILES) {
+      increment(exclusions, "low_relevance");
+      continue;
+    }
     if (selectedSources.length >= budget.max_files) {
       increment(exclusions, "file_count_budget");
       continue;
@@ -31742,6 +31795,9 @@ async function groundRepository(input) {
       score: candidate.score,
       pinned: candidate.pinned
     });
+    if (!candidate.pinned && candidate.score === 0) {
+      selectedZeroScoreFallbacks += 1;
+    }
     documents.push({
       ref,
       path: candidate.path,
@@ -31749,6 +31805,9 @@ async function groundRepository(input) {
       size_bytes: readResult.bytes.byteLength,
       content: readResult.content
     });
+  }
+  if ((exclusions.get("low_relevance") ?? 0) > 0) {
+    warnings.push(`Unpinned zero-relevance context was capped at ${String(MAX_ZERO_SCORE_FALLBACK_FILES)} files.`);
   }
   const fingerprintResult = await fingerprintRepository(root, sortedInventory, hashesByPath);
   warnings.push(...fingerprintResult.warnings);
@@ -32357,6 +32416,7 @@ var SqliteLedger = class {
 
 // packages/core/dist/permissions.js
 import { existsSync as existsSync2, realpathSync as realpathSync2 } from "node:fs";
+import { isIP } from "node:net";
 import { dirname as dirname2, isAbsolute as isAbsolute4, relative as relative4, resolve as resolve4, sep as sep4 } from "node:path";
 import { matchesGlob } from "node:path";
 function shellCommandIsSafe(command) {
@@ -32372,6 +32432,34 @@ var safeShellInspectionTargets = /* @__PURE__ */ new Set([
 ]);
 function shellInspectionTargetIsSafe(target) {
   return safeShellInspectionTargets.has(target);
+}
+function normalizeNetworkReadDomain(value) {
+  const candidate = value.trim().toLowerCase();
+  if (candidate.length === 0 || candidate.length > 253)
+    return null;
+  const unbracketed = candidate.startsWith("[") && candidate.endsWith("]") ? candidate.slice(1, -1) : candidate;
+  if (isIP(unbracketed) !== 0)
+    return unbracketed;
+  if (candidate === "localhost")
+    return candidate;
+  if (candidate.includes("://") || /[/?#@:*]/u.test(candidate))
+    return null;
+  const labels = candidate.split(".");
+  if (labels.some((label) => label.length === 0 || label.length > 63 || !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/u.test(label))) {
+    return null;
+  }
+  return candidate;
+}
+function networkTargetHostname(target) {
+  try {
+    const parsed = new URL(target.includes("://") ? target : `http://${target}`);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:" || parsed.username.length > 0 || parsed.password.length > 0) {
+      return null;
+    }
+    return normalizeNetworkReadDomain(parsed.hostname);
+  } catch {
+    return null;
+  }
 }
 function safeRelativeTarget(repositoryRoot, target) {
   const absoluteTarget = isAbsolute4(target) ? resolve4(target) : resolve4(repositoryRoot, target);
@@ -32409,19 +32497,21 @@ function grantMatches(grant, request, repositoryRoot) {
   const target = request.kind.startsWith("repository.") ? safeRelativeTarget(repositoryRoot, request.target) : request.target;
   if (target === null)
     return false;
+  if (request.kind === "network.read") {
+    const hostname3 = networkTargetHostname(target);
+    if (hostname3 === null)
+      return false;
+    return grant.scopes.some((scope) => {
+      if (scope === "**")
+        return true;
+      return normalizeNetworkReadDomain(scope) === hostname3;
+    });
+  }
   return grant.scopes.some((scope) => {
     if (scope === "**")
       return true;
     if (request.kind === "shell.execute")
       return target === scope;
-    if (scope === "local" && request.kind === "network.read") {
-      try {
-        const hostname3 = new URL(target.includes("://") ? target : `http://${target}`).hostname;
-        return hostname3 === "localhost" || hostname3 === "127.0.0.1" || hostname3 === "::1";
-      } catch {
-        return false;
-      }
-    }
     return matchesGlob(target, scope);
   });
 }
@@ -32484,7 +32574,7 @@ function policyForMode(mode2) {
   if (mode2 !== "report_only")
     allow.push(readRepository);
   if (mode2 === "analyze_only" || mode2 === "analyze_and_fix") {
-    allow.push({ kind: "shell.inspect" }, { kind: "runtime.inspect" }, { kind: "browser.inspect" }, { kind: "network.read", scopes: ["local"] });
+    allow.push({ kind: "shell.inspect" }, { kind: "runtime.inspect" }, { kind: "browser.inspect" }, { kind: "network.read" });
   }
   if (mode2 === "fix_only" || mode2 === "analyze_and_fix") {
     allow.push({ kind: "repository.write", scopes: ["**"] }, { kind: "repository.delete", scopes: ["**"] }, { kind: "shell.inspect" }, { kind: "shell.execute" }, { kind: "runtime.inspect" });
@@ -32906,7 +32996,7 @@ function emptyPermissionSet() {
     subagents: { spawn: false, maximumChildren: 0, maximumDepth: 0 }
   };
 }
-function capabilitiesToPermissionSet(capabilities, shellExecuteAllowlist = [], denyAllShellExecution = false) {
+function capabilitiesToPermissionSet(capabilities, shellExecuteAllowlist = [], denyAll = false, networkReadDomains = []) {
   const permissions = emptyPermissionSet();
   for (const capability2 of capabilities) {
     switch (capability2) {
@@ -32923,7 +33013,7 @@ function capabilitiesToPermissionSet(capabilities, shellExecuteAllowlist = [], d
         permissions.shell.inspect = true;
         break;
       case "shell.execute":
-        permissions.shell.executeAllowlist = denyAllShellExecution ? ["**"] : [...new Set(shellExecuteAllowlist)];
+        permissions.shell.executeAllowlist = denyAll ? ["**"] : [...new Set(shellExecuteAllowlist)];
         break;
       case "runtime.inspect":
         permissions.runtime.inspect = ["local"];
@@ -32938,7 +33028,7 @@ function capabilitiesToPermissionSet(capabilities, shellExecuteAllowlist = [], d
         permissions.browser.mutateState = true;
         break;
       case "network.read":
-        permissions.network.readDomains = ["localhost"];
+        permissions.network.readDomains = denyAll ? ["**"] : [...new Set(networkReadDomains)];
         break;
       case "external.write":
         permissions.network.externalWrite = true;
@@ -33035,11 +33125,21 @@ function assertStartInput(input) {
     throw new Error("Capability lists exceed the 256-item limit");
   }
   const shellExecuteAllowlist = input.authorization.shellExecuteAllowlist ?? [];
+  const networkReadDomains = input.authorization.networkReadDomains ?? [];
   if (shellExecuteAllowlist.length > 256) {
     throw new Error("Shell execute allowlist exceeds the 256-item limit");
   }
+  if (networkReadDomains.length > 256) {
+    throw new Error("Network read domain allowlist exceeds the 256-item limit");
+  }
   if (shellExecuteAllowlist.length > 0 && (!input.host.capabilities.includes("shell.execute") || !input.authorization.granted.includes("shell.execute"))) {
     throw new Error("Exact shell commands require granted shell.execute host capability");
+  }
+  if (networkReadDomains.length > 0 && (!input.host.capabilities.includes("network.read") || !input.authorization.granted.includes("network.read"))) {
+    throw new Error("Network read domains require granted network.read host capability");
+  }
+  if (networkReadDomains.some((domain2) => normalizeNetworkReadDomain(domain2) === null)) {
+    throw new Error("Network read domains must be exact DNS names or IP addresses without schemes, paths, ports, credentials, or wildcards");
   }
   if (shellExecuteAllowlist.some((command) => command === "authorized" || command === "**" || /[*?\[\]]/u.test(command) || !shellCommandIsSafe(command))) {
     throw new Error("Shell execute authorization requires exact, non-compound commands");
@@ -33216,6 +33316,11 @@ var alwaysReadOnlyCapabilities = /* @__PURE__ */ new Set([
   "network.read",
   "subagent.spawn"
 ]);
+var potentiallyMutatingPlanCapabilities = /* @__PURE__ */ new Set([
+  ...alwaysMutatingCapabilities,
+  "shell.execute",
+  "subagent.spawn"
+]);
 function requiresDirectEvidence(path, submissionType) {
   return submissionType === "WorkResult" && (/^body\.evidenceRefs\[\d+\]$/u.test(path) || /^body\.actions\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path)) || /\.claimEvidenceMatrix\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) || /\.completionClaims\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) || /\.observations\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) || /\.inferences\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) || /\.toolEventRefs\[\d+\]$/u.test(path) || /\.verificationRefs\[\d+\]$/u.test(path) || /\.diagnosisGate\.directEvidenceRefs\[\d+\]$/u.test(path) || /\.acceptanceCoverage\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) || /\.acceptanceResults\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) || /\.filesChanged\[\d+\]\.diffRef$/u.test(path) || /\.testResults\[\d+\]\.(?:commandRef|outputRef)$/u.test(path) || /\.verificationResults\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) || /\.(?:ruleCompliance|regressionChecks|userFidelity)\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) || submissionType === "QualityReview" && /\.hardGates\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path);
 }
@@ -33314,10 +33419,21 @@ function equalStringSets(left, right) {
   return left.length === right.length && new Set(left).size === left.length && left.every((item) => right.includes(item));
 }
 function tracePermissionDecision(action, allowed, policyRefs, rationaleSummary) {
+  const capability2 = typeof action.capability === "string" ? action.capability : "unknown";
+  const rawTarget = typeof action.target === "string" ? action.target : "unknown";
+  let scope = rawTarget;
+  if ((capability2 === "network.read" || capability2 === "external.write") && rawTarget !== "unknown") {
+    try {
+      const parsed = new URL(rawTarget.includes("://") ? rawTarget : `http://${rawTarget}`);
+      scope = normalizeNetworkReadDomain(parsed.hostname) ?? "invalid_network_target";
+    } catch {
+      scope = "invalid_network_target";
+    }
+  }
   return {
     decision: allowed ? "allow" : "deny",
-    capability: typeof action.capability === "string" ? action.capability : "unknown",
-    scope: typeof action.target === "string" ? action.target : "unknown",
+    capability: capability2,
+    scope,
     policyRefs,
     rationaleSummary
   };
@@ -33339,6 +33455,9 @@ var RunController = class {
     const runId = randomUUID2();
     const repositoryRoot = realpathSync3(input.repositoryRoot);
     const requestId = randomUUID2();
+    const networkReadDomains = [
+      ...new Set((input.authorization.networkReadDomains ?? []).map((domain2) => normalizeNetworkReadDomain(domain2)))
+    ].filter((domain2) => domain2 !== null).sort();
     const envelopeId = runId;
     const run = {
       runId,
@@ -33378,7 +33497,7 @@ var RunController = class {
         capabilities: input.host.capabilities
       },
       authorization: {
-        granted: capabilitiesToPermissionSet(input.authorization.granted, input.authorization.shellExecuteAllowlist),
+        granted: capabilitiesToPermissionSet(input.authorization.granted, input.authorization.shellExecuteAllowlist, false, networkReadDomains),
         denied: capabilitiesToPermissionSet(input.authorization.denied, [], true)
       },
       budgets: {
@@ -34095,6 +34214,40 @@ var RunController = class {
       if (requiredPlanCriteria.length > 0 && !requiredPlanCriteria.every((criterion) => coveredCriteria.has(criterion))) {
         throw new Error(scopedCriteria ? "Scoped WorkPlan must cover every authorized criterion" : "WorkPlan must cover every TaskContract acceptance criterion");
       }
+      const requiredVerificationStage = run.requestedMode === "analyze_and_fix" ? correctionControl !== null || this.analysisFixUnlocked(run.runId) ? "completion" : "diagnosis" : null;
+      const requiredVerifications = Array.isArray(contract.verificationRequirements) ? contract.verificationRequirements.filter((requirement) => requirement.required === true).filter((requirement) => requiredVerificationStage === null || requirement.stage === requiredVerificationStage) : [];
+      const nodesById = new Map(nodes.map((node) => [node.id, node]));
+      const ancestorIdsByNode = /* @__PURE__ */ new Map();
+      for (const node of nodes) {
+        const pending = [...node.dependsOn];
+        const ancestors = /* @__PURE__ */ new Set();
+        while (pending.length > 0) {
+          const current = pending.pop();
+          if (ancestors.has(current))
+            continue;
+          ancestors.add(current);
+          pending.push(...nodesById.get(current)?.dependsOn ?? []);
+        }
+        ancestorIdsByNode.set(node.id, ancestors);
+      }
+      const mutatingNodes = nodes.filter((node) => (node.allowedTools ?? []).some((capability2) => potentiallyMutatingPlanCapabilities.has(capability2)));
+      for (const requirement of requiredVerifications) {
+        const capability2 = requirement.capability;
+        const stage = requirement.stage;
+        const verificationNodes = typeof capability2 === "string" && typeof stage === "string" && nodes.filter((node) => (node.requiredCapabilities ?? []).includes(capability2) && (node.acceptanceCriteria ?? []).some((criterion) => criterionStages.get(criterion) === stage));
+        if (!verificationNodes || verificationNodes.length === 0) {
+          throw new Error(`Required verification ${String(requirement.id)} using ${String(capability2)} is not scheduled by a same-stage WorkPlan node`);
+        }
+        if (stage === "completion") {
+          for (const verificationNode of verificationNodes) {
+            for (const mutatingNode of mutatingNodes) {
+              if (verificationNode.id !== mutatingNode.id && !ancestorIdsByNode.get(verificationNode.id)?.has(mutatingNode.id)) {
+                throw new Error(`Completion verification ${String(requirement.id)} must run after mutating node ${mutatingNode.id}`);
+              }
+            }
+          }
+        }
+      }
       return;
     }
     if (submission.type === "WorkResult") {
@@ -34214,6 +34367,19 @@ var RunController = class {
         }
       }
       if (body.status === "completed") {
+        const finalMutatingActionIndex = actions.findLastIndex((action) => action.status === "completed" && action.mutating === true);
+        if (finalMutatingActionIndex >= 0) {
+          const contract = this.latestBody(run.runId, "TaskContract");
+          const completionCriterionIds = new Set(Array.isArray(contract.acceptanceCriteria) ? contract.acceptanceCriteria.filter((criterion) => typeof criterion === "object" && criterion !== null).filter((criterion) => criterion.stage === "completion").map((criterion) => criterion.id).filter((id2) => typeof id2 === "string") : []);
+          const nodeOwnsCompletion = (node.acceptanceCriteria ?? []).some((criterion) => completionCriterionIds.has(criterion));
+          const completionVerifications = Array.isArray(contract.verificationRequirements) ? contract.verificationRequirements.filter((requirement) => requirement.required === true && requirement.stage === "completion" && typeof requirement.capability === "string" && nodeOwnsCompletion && (node.requiredCapabilities ?? []).includes(requirement.capability)) : [];
+          for (const requirement of completionVerifications) {
+            const verificationActionIndex = actions.findIndex((action, index) => index > finalMutatingActionIndex && action.capability === requirement.capability && action.status === "completed" && action.mutating === false);
+            if (verificationActionIndex < 0) {
+              throw new Error(`Completion verification ${String(requirement.id)} must run after the final mutating action`);
+            }
+          }
+        }
         for (const capability2 of node.requiredCapabilities ?? []) {
           if (!actions.some((action) => action.capability === capability2 && action.status === "completed")) {
             throw new Error(`Completed WorkResult is missing required capability ${capability2}`);
@@ -34318,7 +34484,20 @@ var RunController = class {
             const priorResults = Array.isArray(review.verificationResults) ? review.verificationResults : [];
             return priorResults.some((prior) => prior.requirementId === requirement.id && prior.capability === requirement.capability && prior.status === "pass" && equalStringSets(stringArray(prior.evidenceRefs), stringArray(result.evidenceRefs)));
           });
-          const capabilityObserved = retainedDiagnosis || expectedResults.map((reference) => artifactIdFromUri(reference)).map((artifactId) => artifactId ? this.ledger.getArtifact(run.runId, artifactId)?.body : null).some((workResult) => typeof workResult === "object" && workResult !== null && Array.isArray(workResult.actions) && workResult.actions.some((action) => action.capability === requirement.capability && action.status === "completed" && action.mutating === false && stringArray(action.evidenceRefs).some((reference) => verificationEvidence.has(reference))));
+          const stageCriterionIds = new Set(criterionRecords.filter((criterion) => criterion.stage === requirement.stage).map((criterion) => criterion.id).filter((id2) => typeof id2 === "string"));
+          const eligibleNodeIds = new Set(Array.isArray(currentPlan.nodes) ? currentPlan.nodes.filter((node) => typeof node === "object" && node !== null).filter((node) => stringArray(node.requiredCapabilities).includes(String(requirement.capability))).filter((node) => stringArray(node.acceptanceCriteria).some((criterion) => stageCriterionIds.has(criterion))).map((node) => node.id).filter((id2) => typeof id2 === "string") : []);
+          const capabilityObserved = retainedDiagnosis || expectedResults.map((reference) => artifactIdFromUri(reference)).map((artifactId) => artifactId ? this.ledger.getArtifact(run.runId, artifactId)?.body : null).some((workResult) => {
+            if (typeof workResult !== "object" || workResult === null || !Array.isArray(workResult.actions)) {
+              return false;
+            }
+            const workResultRecord = workResult;
+            if (typeof workResultRecord.nodeId !== "string" || !eligibleNodeIds.has(workResultRecord.nodeId)) {
+              return false;
+            }
+            const actions = workResultRecord.actions;
+            const finalMutatingActionIndex = actions.findLastIndex((action) => action.status === "completed" && action.mutating === true);
+            return actions.some((action, index) => action.capability === requirement.capability && action.status === "completed" && action.mutating === false && (requirement.stage !== "completion" || finalMutatingActionIndex < 0 || index > finalMutatingActionIndex) && stringArray(action.evidenceRefs).some((reference) => verificationEvidence.has(reference)));
+          });
           if (!capabilityObserved) {
             throw new Error(`Passed verification ${String(requirement.id)} lacks a completed capability action`);
           }
@@ -35109,6 +35288,7 @@ var ExcludedCandidateSummarySchema = external_exports.object({
     "inventory_budget",
     "invalid_path",
     "invalid_utf8",
+    "low_relevance",
     "non_regular_file",
     "path_escape",
     "secret_content",
@@ -35765,12 +35945,12 @@ var WorkPlanSchema = external_exports.object({
   id: IdentifierSchema,
   runId: RunIdSchema,
   taskContractRef: ArtifactUriSchema,
-  executionMode: external_exports.enum(["serial", "parallel", "mixed"]),
+  executionMode: external_exports.literal("serial"),
   nodes: external_exports.array(WorkNodeSchema).min(1).max(64),
   joinRules: external_exports.array(BoundedTextSchema).max(64),
   globalBudgets: external_exports.object({
     maximumToolCalls: external_exports.number().int().min(0).max(4e3),
-    maximumParallelWorkers: external_exports.number().int().min(1).max(16),
+    maximumParallelWorkers: external_exports.literal(1),
     maximumSubagentDepth: external_exports.number().int().min(0).max(4)
   }).strict(),
   planValidation: external_exports.enum(["pending", "valid", "invalid"]),
@@ -35827,13 +36007,6 @@ var WorkPlanSchema = external_exports.object({
       code: "custom",
       path: ["nodes"],
       message: "WorkPlan nodes must form a directed acyclic graph"
-    });
-  }
-  if (plan.executionMode === "serial" && plan.globalBudgets.maximumParallelWorkers !== 1) {
-    context.addIssue({
-      code: "custom",
-      path: ["globalBudgets", "maximumParallelWorkers"],
-      message: "Serial plans must use exactly one parallel worker"
     });
   }
 });
@@ -36952,7 +37125,8 @@ var TelicService = class {
       authorization: {
         granted,
         denied,
-        ...input.shellExecuteAllowlist ? { shellExecuteAllowlist: input.shellExecuteAllowlist } : {}
+        ...input.shellExecuteAllowlist ? { shellExecuteAllowlist: input.shellExecuteAllowlist } : {},
+        ...input.networkReadDomains ? { networkReadDomains: input.networkReadDomains } : {}
       }
     });
   }
@@ -37299,7 +37473,7 @@ ${JSON.stringify(original_request)}
 Requested mode: ${requestedMode}
 
 Workflow contract:
-1. Call telic_start_run once. Pass the exact original_request and requested mode. Report the real host name, available capabilities, and only authority the user actually granted. Never infer missing permission.
+1. Call telic_start_run once. Pass the exact original_request and requested mode. Report the real host name, available capabilities, and only authority the user actually granted. For network.read, pass only explicitly approved exact hostnames in network_read_domains. Never infer missing permission.
 2. Follow the returned nextAction. For context_discovery, call telic_ground_context with the current run_id, action_id, and expected_run_version.
 3. For each phase action, inspect its bounded inputRefs with telic_get_artifact as needed. Produce exactly its required output type and schema, then call telic_submit_artifact with the current action and run version. Use telic_get_next_action only to refresh the controller state.
 4. Do not skip, reorder, or invent phases. Submit optional supporting artifacts only when the current action permits them. Keep evidence and source references attached to claims.
@@ -37328,7 +37502,8 @@ function registerTools(server, service) {
         host_capabilities: external_exports.array(capability).max(256).default(["repository.read"]),
         authorization_granted: external_exports.array(capability).max(256).optional(),
         authorization_denied: external_exports.array(capability).max(256).default([]),
-        shell_execute_allowlist: external_exports.array(external_exports.string().min(1).max(2048)).max(256).default([])
+        shell_execute_allowlist: external_exports.array(external_exports.string().min(1).max(2048)).max(256).default([]),
+        network_read_domains: external_exports.array(external_exports.string().min(1).max(253)).max(256).default([])
       },
       annotations: {
         readOnlyHint: false,
@@ -37349,7 +37524,8 @@ function registerTools(server, service) {
             hostCapabilities: input.host_capabilities,
             ...input.authorization_granted ? { authorizationGranted: input.authorization_granted } : {},
             authorizationDenied: input.authorization_denied,
-            shellExecuteAllowlist: input.shell_execute_allowlist
+            shellExecuteAllowlist: input.shell_execute_allowlist,
+            networkReadDomains: input.network_read_domains
           })
         });
       } catch (error51) {
@@ -37580,7 +37756,7 @@ function registerTools(server, service) {
   );
 }
 function createTelicMcpServer(service) {
-  const server = new McpServer({ name: "telic", version: "0.1.0" });
+  const server = new McpServer({ name: "telic", version: "0.1.1" });
   registerPrompts(server);
   registerTools(server, service);
   return server;

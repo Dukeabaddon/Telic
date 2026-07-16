@@ -2,3 +2,6 @@ interface:
   display_name: "Telic"
   short_description: "Compile coding intent into verified workflows"
   default_prompt: "Use $telic:telic to compile and verify this coding request with evidence."
+
+policy:
+  allow_implicit_invocation: true

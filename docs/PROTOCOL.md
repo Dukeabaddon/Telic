@@ -91,16 +91,14 @@ model errors remain possible.
 
 ### 4.2 Native subagent execution
 
-The protocol schema can represent parallel or mixed WorkPlans for future
-adapters. The current controller accepts deterministic serial WorkPlans only. A
-future host adapter MAY assign independent nodes to separate contexts only after
-it also enforces the WorkPlan's concurrency, depth, tools, context, and output
-boundaries. Parallel execution does not change the protocol or turn Telic into a
-decentralized swarm.
+Protocol v1 and the current controller accept deterministic serial WorkPlans
+only. A future protocol version MAY represent parallel or mixed plans after its
+adapters can enforce concurrency, depth, tools, context, and output boundaries.
+Parallel execution would not turn Telic into a decentralized swarm.
 
 ### 4.3 MCP boundary
 
-The implemented MCP surface is a state and artifact boundary. Version `0.1.0`
+The implemented MCP surface is a state and artifact boundary. Version `0.1.1`
 exposes `telic_start_run`, `telic_ground_context`,
 `telic_get_next_action`, `telic_submit_artifact`, `telic_get_run`,
 `telic_get_artifact`, and `telic_get_trace`. These source-preview names can
@@ -230,6 +228,12 @@ present in immutable run authorization, the TaskContract, and the WorkPlan node.
 `git.log`, `network.listen`, `process.list`, or `runtime.logs`), not arbitrary
 shell text. These checks validate submitted artifacts; they do not intercept a
 host's native shell.
+
+Network reads require an exact DNS name or IP address in immutable run
+authorization, the TaskContract, and the WorkPlan node. Authorization compares
+the parsed URL hostname exactly: it does not infer subdomains, accept wildcard
+entries, or trust URL credentials. The intent-mode policy permits read-only
+network capability, while the intersected authorization sets its domain scope.
 
 ## 8. Artifact types
 
@@ -379,6 +383,11 @@ A ContextManifest MUST preserve provenance and explain selection. A derived
 summary MUST reference its exact source artifacts. User instructions, applicable
 rules, permissions, acceptance criteria, errors, active diffs, and verification
 evidence MUST NOT be lossily compressed.
+
+The executable selector matches request terms on normalized path-token
+boundaries. Applicable rules and exact active paths remain pinned. Unpinned
+zero-score fallback is capped at eight files; additional candidates are counted
+as `low_relevance` and produce a manifest warning.
 
 ```yaml
 ClarificationRequest:
@@ -633,7 +642,7 @@ Agent 3 compiles an approved contract into a bounded directed acyclic graph.
 WorkPlan:
   id: plan-01
   task_contract_ref: artifact://run-01/contract-02
-  execution_mode: serial # serial | parallel | mixed
+  execution_mode: serial
   nodes:
     - id: browser-investigation
       logical_role: executor.browser-investigator
@@ -675,6 +684,16 @@ controller accepts serial plans only and limits the sum of node tool-call
 reservations across accepted WorkPlans to 4,000 per run. An initial
 analyze-and-fix plan covers diagnosis criteria only; the post-gate correction
 order and plan cover every completion criterion.
+
+Before accepting a plan, the controller maps every required verification for
+the active stage to at least one node that covers a same-stage acceptance
+criterion and declares the contracted capability as required. The existing
+tool, permission, and budget checks then prove that the verification can be
+attempted. A plan that would make its own contract unfinishable is rejected
+before execution. Completion-verification nodes must also depend, directly or
+transitively, on every node allowed to perform a potentially mutating action.
+When mutation and verification share a node, its completed WorkResult must
+record the matching non-mutating verification action after the final mutation.
 
 ### 8.8 `WorkResult`
 
@@ -795,13 +814,16 @@ A passing review requires score 80 or higher and `pass` for every applicable
 criterion, rule, regression check, hard gate, and required verification. Rule
 checks cover each `TaskContract.ruleRef` exactly once through `subjectRef`;
 verification results cover each requirement exactly once and match its declared
-capability. Passed verification is tied to a completed action and compatible
-direct evidence. Each passing acceptance result uses the exact evidence set from
-matching current WorkResult coverage. An unassigned, unchanged criterion may
-retain the exact evidence of an earlier passing review; criteria assigned to the
-current plan cannot reuse stale review evidence. The final analyze-and-fix review
-retains the earlier diagnosis verification and requires an actual completed
-mutation before it can pass.
+capability. Passed verification is tied to compatible direct evidence from a
+completed WorkResult whose plan node schedules that capability and a criterion
+from the same verification stage. For completion verification in a mutating
+WorkResult, that evidence must come from a matching non-mutating action after
+the final mutation. Each passing acceptance result uses the exact evidence set
+from matching current WorkResult coverage. An unassigned, unchanged criterion
+may retain the exact evidence of an earlier passing review; criteria assigned
+to the current plan cannot reuse stale review evidence. The final
+analyze-and-fix review retains the earlier diagnosis verification and requires
+an actual completed mutation before it can pass.
 
 If remediation is needed, Agent 3 creates the smallest corrective work order. It
 does not grant additional permissions.

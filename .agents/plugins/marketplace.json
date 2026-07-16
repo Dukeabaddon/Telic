@@ -1,7 +1,7 @@
 {
-  "name": "personal",
+  "name": "dukeabaddon-telic",
   "interface": {
-    "displayName": "Personal"
+    "displayName": "Telic"
   },
   "plugins": [
     {

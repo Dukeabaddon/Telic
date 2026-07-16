@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "1.0",
+  "id": "plan-parallel",
+  "runId": "run-01",
+  "taskContractRef": "artifact://run-01/contract-01",
+  "executionMode": "parallel",
+  "nodes": [
+    {
+      "id": "inspect",
+      "logicalRole": "executor",
+      "objective": "Inspect the approved repository evidence.",
+      "dependsOn": [],
+      "inputRefs": ["artifact://run-01/contract-01"],
+      "contextRefs": ["repo://src/index.ts"],
+      "allowedTools": ["repository.read"],
+      "requiredCapabilities": ["repository.read"],
+      "permissions": {
+        "repository": { "read": ["**"], "write": [], "delete": [] },
+        "shell": { "inspect": false, "executeAllowlist": [] },
+        "runtime": { "inspect": [], "restart": [] },
+        "browser": { "inspect": false, "mutateState": false },
+        "network": { "readDomains": [], "externalWrite": false },
+        "subagents": {
+          "spawn": false,
+          "maximumChildren": 0,
+          "maximumDepth": 0
+        }
+      },
+      "outputType": "WorkResult",
+      "acceptanceCriteria": ["AC-1"],
+      "stopConditions": ["Stop before mutation."],
+      "budgets": { "maximumToolCalls": 1, "maximumChildren": 0 }
+    }
+  ],
+  "joinRules": [],
+  "globalBudgets": {
+    "maximumToolCalls": 1,
+    "maximumParallelWorkers": 2,
+    "maximumSubagentDepth": 0
+  },
+  "planValidation": "valid",
+  "rationaleSummary": "Parallel execution is unsupported in protocol v1."
+}

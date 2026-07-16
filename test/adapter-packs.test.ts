@@ -126,8 +126,29 @@ describe("source-preview host adapters", () => {
     }
   });
 
-  it("uses host-native activation names without inventing one universal syntax", () => {
+  it("describes the current controller as serial-only", () => {
+    const toolUsage = read(
+      "plugins/telic/skills/telic/references/tool-usage.md",
+    );
+    const contracts = read(
+      "plugins/telic/skills/telic/references/artifact-contracts.md",
+    );
+    expect(toolUsage).toMatch(/one WorkPlan\s+node at a time/u);
+    expect(toolUsage).not.toContain("Parallelize only independent WorkPlan");
+    expect(contracts).toContain("serial execution mode");
+    expect(contracts).not.toContain("serial/parallel/mixed mode");
+  });
+
+  it("uses universal human intent with host-native activation fallbacks", () => {
     const skill = read("plugins/telic/skills/telic/SKILL.md");
+    const publicReadme = read("README.md");
+    const demo = read("docs/DEMO.md");
+    expect(skill).toContain("`Telic: <request>`");
+    expect(skill).toContain("Do not activate for setup");
+    expect(publicReadme).toContain("`Telic: <your request>`");
+    expect(publicReadme).toContain("technical fallback");
+    expect(demo).toContain("Telic: investigate");
+    expect(demo).not.toContain("Use $telic:telic to investigate");
     expect(skill).toContain("$telic:telic");
     expect(skill).toContain("/telic:telic");
     expect(skill).toContain("expose `/telic`");

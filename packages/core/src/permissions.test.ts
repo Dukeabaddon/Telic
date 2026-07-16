@@ -171,4 +171,63 @@ describe("permission intersection", () => {
     );
     expect(decision.allowed).toBe(false);
   });
+
+  it("authorizes network reads by exact hostname", () => {
+    const policies = [
+      {
+        name: "authorization",
+        allow: [{ kind: "network.read" as const, scopes: ["api.example.com"] }],
+      },
+      {
+        name: "work-node",
+        allow: [{ kind: "network.read" as const, scopes: ["api.example.com"] }],
+      },
+    ];
+
+    expect(
+      authorizeAction(
+        { kind: "network.read", target: "https://api.example.com/v1/items" },
+        policies,
+        root,
+      ).allowed,
+    ).toBe(true);
+    for (const target of [
+      "https://sub.api.example.com/v1/items",
+      "https://api.example.com.evil.invalid/v1/items",
+      "https://user:password@api.example.com/v1/items",
+      "not a valid host",
+    ]) {
+      expect(
+        authorizeAction({ kind: "network.read", target }, policies, root)
+          .allowed,
+      ).toBe(false);
+    }
+  });
+
+  it("treats local as an exact hostname rather than a loopback alias", () => {
+    const policies = [
+      {
+        name: "authorization",
+        allow: [{ kind: "network.read" as const, scopes: ["local"] }],
+      },
+    ];
+
+    expect(
+      authorizeAction(
+        { kind: "network.read", target: "http://local/status" },
+        policies,
+        root,
+      ).allowed,
+    ).toBe(true);
+    for (const target of [
+      "http://localhost/status",
+      "http://127.0.0.1/status",
+      "http://[::1]/status",
+    ]) {
+      expect(
+        authorizeAction({ kind: "network.read", target }, policies, root)
+          .allowed,
+      ).toBe(false);
+    }
+  });
 });

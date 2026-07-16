@@ -17,7 +17,11 @@ The build copies the standalone MCP bundle and canonical skill into every pack.
 Project overlays must be merged into a target repository; do not overwrite an
 existing host configuration blindly.
 
-| Host            | Preview layout                    | Preferred activation                               |
+Use `Telic: <your request>` as the portable human-facing intent when the host
+supports description-based skill matching. The table lists each host's native
+fallback.
+
+| Host            | Preview layout                    | Native fallback                                    |
 | --------------- | --------------------------------- | -------------------------------------------------- |
 | Claude Code     | `claude-code/telic/` plugin       | `/telic:telic`                                     |
 | Antigravity CLI | `antigravity/telic/` plugin       | `/telic`; native IDE activation remains unverified |

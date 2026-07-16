@@ -256,8 +256,11 @@ describe("controller security and conformance", () => {
     it("rejects a repository action outside the WorkPlan node write scope", async () => {
       const harness = await scopedFixHarness();
       const plan = harness.body("WorkPlan");
-      plan.nodes[0].allowedTools = ["repository.write"];
-      plan.nodes[0].requiredCapabilities = ["repository.write"];
+      plan.nodes[0].allowedTools = ["repository.write", "repository.read"];
+      plan.nodes[0].requiredCapabilities = [
+        "repository.write",
+        "repository.read",
+      ];
       plan.nodes[0].permissions = scopedFixPermissions();
       submitPlan(harness, plan);
       captureEvidence(harness);
@@ -283,8 +286,11 @@ describe("controller security and conformance", () => {
     it("rejects a changed file outside the WorkPlan node write scope", async () => {
       const harness = await scopedFixHarness();
       const plan = harness.body("WorkPlan");
-      plan.nodes[0].allowedTools = ["repository.write"];
-      plan.nodes[0].requiredCapabilities = ["repository.write"];
+      plan.nodes[0].allowedTools = ["repository.write", "repository.read"];
+      plan.nodes[0].requiredCapabilities = [
+        "repository.write",
+        "repository.read",
+      ];
       plan.nodes[0].permissions = scopedFixPermissions();
       submitPlan(harness, plan);
       captureEvidence(harness);
@@ -319,8 +325,8 @@ describe("controller security and conformance", () => {
     it("rejects a shell command outside the node execute allowlist", async () => {
       const harness = await scopedFixHarness();
       const plan = harness.body("WorkPlan");
-      plan.nodes[0].allowedTools = ["shell.execute"];
-      plan.nodes[0].requiredCapabilities = ["shell.execute"];
+      plan.nodes[0].allowedTools = ["shell.execute", "repository.read"];
+      plan.nodes[0].requiredCapabilities = ["shell.execute", "repository.read"];
       plan.nodes[0].permissions = scopedFixPermissions();
       submitPlan(harness, plan);
       captureEvidence(harness);

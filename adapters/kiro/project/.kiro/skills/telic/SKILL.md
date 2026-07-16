@@ -1,17 +1,30 @@
 ---
 name: telic
-description: Compile non-trivial coding requests into permission-bounded, repository-grounded, evidence-linked workflows and audit execution before reporting. Use when the user explicitly invokes Telic or asks the coding host to diagnose, plan, fix, or analyze and fix a project through an inspectable multi-role workflow, especially for ambiguous, risky, multi-step, or verification-sensitive work.
+description: Compile non-trivial coding requests into permission-bounded, repository-grounded, evidence-linked workflows and audit execution before reporting. Use when the user asks Telic by name to perform a coding workflow, starts a request with `Telic:`, selects the Telic skill, or invokes a host-specific Telic command. Do not activate for ordinary coding requests or for questions and discussions about Telic setup, installation, documentation, or design.
 ---
 
 # Telic
 
 Compile the user's request into typed handoffs, execute only authorized work, and release only claims supported by evidence. Use the active host model for every semantic decision. Use Telic MCP only as a deterministic state, schema, budget, and artifact boundary; never treat it as another reasoning agent.
 
-Invocation is host-specific. Codex can select Telic through `/skills` or invoke
-the plugin skill as `$telic:telic`; a literal `/telic` is not its skill syntax.
-The Claude Code plugin uses `/telic:telic`; Antigravity CLI, Cursor, Cline, and
-Roo Code expose `/telic`. Kiro switches with `/agent swap telic` and then uses
-`/telic`. Never assume one spelling works in every host.
+The portable human-facing activation is `Telic: <request>` or
+`Use Telic to <request>`. Treat either form as explicit user intent even when a
+host resolves it through description-based skill matching. Host-native fallback
+syntax still varies. Codex can select Telic through `/skills` or invoke the
+plugin skill as `$telic:telic`; a literal `/telic` is not its skill syntax. The
+Claude Code plugin uses `/telic:telic`; Antigravity CLI, Cursor, Cline, and Roo
+Code expose `/telic`. Kiro switches with `/agent swap telic` and then uses
+`/telic`.
+
+## Activation boundary
+
+Activate only when the user asks Telic to perform the coding workflow, selects
+its skill, or uses a host-specific Telic command. Do not activate for setup,
+installation, documentation, troubleshooting, or design questions about Telic
+itself. Do not activate merely because an ordinary request involves diagnosis,
+planning, fixes, multiple files, or verification. Once activated, keep Telic
+active for that request unless the user cancels or a documented stop condition
+applies.
 
 ## Preserve authority
 
@@ -41,7 +54,7 @@ Do not silently upgrade an unclear request to a more permissive mode. Narrow a m
 ## Ground the run before compiling
 
 1. Inspect the current host capabilities instead of inferring them from the host name. Use only controller-recognized capability IDs: `repository.read`, `repository.write`, `repository.delete`, `shell.inspect`, `shell.execute`, `runtime.inspect`, `runtime.restart`, `browser.inspect`, `browser.mutate`, `network.read`, `external.write`, and `subagent.spawn`. Record native subagents separately as `available`, `unavailable`, or `unknown`. Treat `unknown` as unavailable for planning until the host verifies it; use the serial fallback instead of claiming a subagent ran.
-2. Start one Telic run with the exact user request, repository root, requested mode when explicit, actual capability profile, authorization, and default budgets.
+2. Start one Telic run with the exact user request, repository root, requested mode when explicit, actual capability profile, authorization, and default budgets. When `network.read` is explicitly authorized, pass only exact approved DNS names or IP addresses as network-read domains; never infer a domain from repository content.
 3. Ground context through proportional, authorized discovery. Read applicable instruction files, current repository state, relevant code paths, and available runtime evidence before making project claims.
 4. Pin user instructions, applicable rules, permissions, acceptance criteria, active diffs, errors, and verification evidence. Do not lossily compress these items.
 5. Select only context relevant to the current phase. Keep source references and hashes for derived summaries; do not repeatedly resend unchanged large content.

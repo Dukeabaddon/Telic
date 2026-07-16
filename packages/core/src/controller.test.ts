@@ -236,6 +236,54 @@ describe("RunController", () => {
     });
   });
 
+  it("persists explicit validated network-read domains", () => {
+    const { controller, ledger, repository } = setup();
+    const input = {
+      repositoryRoot: repository,
+      originalRequest: "Inspect the public API response.",
+      requestedMode: "analyze_only" as const,
+      host: {
+        name: "codex",
+        nativeSubagents: "unavailable" as const,
+        capabilities: ["network.read"],
+      },
+      authorization: {
+        granted: ["network.read"],
+        denied: [],
+        networkReadDomains: ["API.Example.com"],
+      },
+    };
+
+    const started = controller.startRun(input);
+    expect(
+      ledger.getArtifact(started.run.runId, started.run.runId)?.body,
+    ).toMatchObject({
+      authorization: {
+        granted: { network: { readDomains: ["api.example.com"] } },
+      },
+    });
+
+    expect(() =>
+      controller.startRun({
+        ...input,
+        authorization: {
+          ...input.authorization,
+          networkReadDomains: ["https://api.example.com/path"],
+        },
+      }),
+    ).toThrow(/network read domains/i);
+    expect(() =>
+      controller.startRun({
+        ...input,
+        authorization: {
+          granted: [],
+          denied: [],
+          networkReadDomains: ["api.example.com"],
+        },
+      }),
+    ).toThrow(/require granted network\.read/i);
+  });
+
   it("validates clarification response bounds", () => {
     const { controller, repository } = setup();
     const started = controller.startRun({

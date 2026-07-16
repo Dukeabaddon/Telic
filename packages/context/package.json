@@ -1,6 +1,6 @@
 {
   "name": "@telic/context",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Deterministic, bounded, secret-aware repository grounding for Telic.",
   "type": "module",

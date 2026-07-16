@@ -1,19 +1,22 @@
 # Installation and local runtime
 
-**Status: local preview.** The npm package provides the portable `telic` CLI and
-STDIO MCP server. The repository can also be built, tested, loaded through its
-local Codex marketplace, and materialized into six experimental host packs.
-There is no remote host marketplace, signed release, or full lifecycle
-certification yet.
+**Status: public preview.** The npm package provides the portable `telic` CLI
+and STDIO MCP server. Codex can install the plugin through this repository's Git
+marketplace. The repository can also be built and materialized into six
+experimental host packs. There is no curated Codex directory listing, signed
+release, or full lifecycle certification yet.
 
 ## Requirements
 
-- Node.js `>=24.15.0`
-- npm and the checked-in `package-lock.json`
-- Codex with plugin support for the Codex-native preview
+- Every path: Node.js `>=24.15.0`
+- Codex plugin: a current Codex CLI with plugin support and Git
+- npm/portable MCP: npm or another `npx`-compatible npm client
+- source development: npm; the repository already supplies `package-lock.json`
 - optional Python 3 with `venv` and installed Codex system skills for the
   official Codex-only validation pass
-- optional Git and ripgrep; context discovery falls back to the filesystem when unavailable
+- optional ripgrep; runtime context discovery falls back to the filesystem when
+  ripgrep is unavailable, and can fall back when Git is unavailable after
+  installation
 
 No separate model API key, browser package, database server, service manager,
 open port, or global npm install is required.
@@ -23,7 +26,7 @@ open port, or global npm install is required.
 Run without installing globally:
 
 ```bash
-npx telic-mcp doctor --json
+npx -y telic-mcp doctor --json
 ```
 
 Or install the CLI:
@@ -115,38 +118,48 @@ plugins/telic/
 └── skills/telic/
 ```
 
-Build first so the bundled server matches the TypeScript source. Then add the repository's local marketplace:
+Build first so the bundled server matches the TypeScript source. Then add the
+repository root as the local marketplace:
 
 ```bash
-codex plugin marketplace add "$PWD/.agents/plugins" --json
+codex plugin marketplace add "$PWD" --json
 codex plugin list --available --json
-codex plugin add telic@personal --json
+codex plugin add telic@dukeabaddon-telic --json
 codex plugin list --json
 codex mcp list --json
 ```
 
-The marketplace manifest currently names itself `personal`. If Codex reports a different configured name or a naming collision, use the name returned by the first command. Start a fresh Codex session after installation so skill and MCP discovery use the installed snapshot.
+The marketplace has the stable ID `dukeabaddon-telic`, which avoids collisions
+with a user's personal marketplace. Start a fresh Codex session after
+installation so skill and MCP discovery use the installed snapshot.
 
-Use `/skills` to select Telic, or explicitly activate the installed skill in a
-prompt:
+Use the portable natural-language activation in a new prompt:
 
 ```text
-Use $telic:telic to investigate this repository. Analyze only; do not change files.
+Telic: investigate this repository. Analyze only; do not change files.
 ```
+
+Telic enables description matching only for a request that asks for Telic by
+name. For deterministic manual selection in Codex, use `/skills` or
+`$telic:telic` as the technical fallback.
 
 This is a development installation from the current working tree, not a published judge path. It modifies the user's Codex marketplace/plugin configuration, so review the displayed paths and output before proceeding.
 
-Codex reserves slash commands for its command surface. Reusable skill workflows
-use `/skills` or a `$skill` mention. Do not add a deprecated custom prompt only
-to manufacture `/telic` in Codex.
+For the public Git marketplace path, no source build is required:
+
+```bash
+codex plugin marketplace add Dukeabaddon/Telic --json
+codex plugin add telic@dukeabaddon-telic --json
+```
+
+Codex reserves slash commands for its command surface. Do not add a deprecated
+custom prompt only to manufacture `/telic` in Codex.
 
 ### Remove the preview install
 
-Use the configured marketplace name shown by `codex plugin marketplace list`:
-
 ```bash
-codex plugin remove telic@personal --json
-codex plugin marketplace remove personal --json
+codex plugin remove telic@dukeabaddon-telic --json
+codex plugin marketplace remove dukeabaddon-telic --json
 ```
 
 These commands remove Codex's installed plugin/cache and marketplace entry. They do not remove the source checkout or Telic run state.
@@ -178,7 +191,7 @@ install, permission, upgrade, or uninstall behavior in that host.
 ## Runtime lifecycle
 
 ```text
-Codex activates telic:telic
+Codex resolves an explicit Telic request or selection
         |
         v
 Codex launches plugin-provided Telic STDIO process

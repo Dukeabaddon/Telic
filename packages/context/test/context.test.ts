@@ -92,6 +92,85 @@ describe("groundRepository", () => {
     expect(JSON.stringify(result.trace_summary)).not.toContain("/api/projects");
   });
 
+  it("matches request terms on path-token boundaries", async () => {
+    const root = await temporaryDirectory("telic-context-token-ranking-");
+    await write(root, "AGENTS.md", "Rules\n");
+    await write(root, "src/api/client.ts", "export const api = true;\n");
+    await write(
+      root,
+      "src/capitalization.ts",
+      "export const capitalization = true;\n",
+    );
+    await initializeGit(root);
+
+    const result = await groundRepository({
+      run_id: "run-token-ranking",
+      repository_root: root,
+      request: "investigate the api failure",
+      budget: { max_files: 2 },
+    });
+
+    expect(result.documents.map((document) => document.path)).toEqual([
+      "AGENTS.md",
+      "src/api/client.ts",
+    ]);
+  });
+
+  it("caps unpinned zero-relevance fallback context", async () => {
+    const root = await temporaryDirectory("telic-context-relevance-cap-");
+    await write(root, "AGENTS.md", "Rules\n");
+    await write(root, "src/api/client.ts", "export const api = true;\n");
+    for (let index = 0; index < 30; index += 1) {
+      await write(
+        root,
+        `generated/report-${String(index).padStart(2, "0")}.json`,
+        JSON.stringify({ index }),
+      );
+    }
+    await initializeGit(root);
+
+    const result = await ground(root, "investigate the api failure");
+    const fallbackSources = result.manifest.selected_sources.filter(
+      (source) => source.score === 0 && !source.pinned,
+    );
+
+    expect(fallbackSources).toHaveLength(8);
+    expect(result.manifest.excluded_candidates).toContainEqual({
+      reason: "low_relevance",
+      count: 22,
+    });
+    expect(result.manifest.warnings).toContain(
+      "Unpinned zero-relevance context was capped at 8 files.",
+    );
+  });
+
+  it("does not treat every file under packages as project metadata", async () => {
+    const root = await temporaryDirectory("telic-context-package-boundary-");
+    await write(root, "AGENTS.md", "Rules\n");
+    await write(root, "package.json", '{"name":"fixture"}\n');
+    await write(root, "src/api/client.ts", "export const api = true;\n");
+    for (let index = 0; index < 20; index += 1) {
+      await write(
+        root,
+        `packages/package-${String(index).padStart(2, "0")}/src/controller.ts`,
+        `export const value = ${String(index)};\n`,
+      );
+    }
+    await initializeGit(root);
+
+    const result = await ground(root, "investigate the api failure");
+    const packageSources = result.manifest.selected_sources.filter((source) =>
+      source.path.startsWith("packages/"),
+    );
+
+    expect(packageSources).toHaveLength(8);
+    expect(packageSources.every((source) => source.score === 0)).toBe(true);
+    expect(result.manifest.excluded_candidates).toContainEqual({
+      reason: "low_relevance",
+      count: 12,
+    });
+  });
+
   it("excludes secret-like files without leaking their contents", async () => {
     const root = await temporaryDirectory("telic-context-secrets-");
     await write(root, "AGENTS.md", "Rules\n");

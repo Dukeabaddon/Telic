@@ -119,6 +119,7 @@ export const ExcludedCandidateSummarySchema = z
       "inventory_budget",
       "invalid_path",
       "invalid_utf8",
+      "low_relevance",
       "non_regular_file",
       "path_escape",
       "secret_content",

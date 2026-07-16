@@ -35,9 +35,13 @@ const marketplace = object(
   JSON.parse(readFileSync(marketplacePath, "utf8")),
   "$",
 );
-nonEmptyString(marketplace.name, "$.name");
+if (marketplace.name !== "dukeabaddon-telic") {
+  fail("$.name must be the stable public marketplace id dukeabaddon-telic");
+}
 const marketplaceInterface = object(marketplace.interface, "$.interface");
-nonEmptyString(marketplaceInterface.displayName, "$.interface.displayName");
+if (marketplaceInterface.displayName !== "Telic") {
+  fail("$.interface.displayName must be Telic");
+}
 
 if (!Array.isArray(marketplace.plugins)) {
   fail("$.plugins must be an array");

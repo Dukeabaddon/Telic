@@ -7,12 +7,22 @@ Telic is a local MCP control plane for coding agents. It does not call a model
 API or run a hosted service. The active coding host supplies the model; Telic
 validates workflow artifacts, permissions, evidence references, and run state.
 
+**Status:** public preview. Selected source, submitted evidence, and traces may
+be stored exactly in local Telic state. Review the repository's
+[Security](https://github.com/Dukeabaddon/Telic/blob/main/SECURITY.md) and
+[Privacy](https://github.com/Dukeabaddon/Telic/blob/main/PRIVACY.md) guidance
+before using sensitive code.
+
+This npm package provides the portable CLI and MCP tools. It does not install
+the Telic workflow skill into Codex. For the complete Codex plugin, use the
+[Git marketplace installation](https://github.com/Dukeabaddon/Telic#try-telic-in-two-minutes).
+
 ## Install
 
-Run without a global install:
+Run without a global install from the project you want to inspect:
 
 ```bash
-npx telic-mcp doctor --json
+npx -y telic-mcp doctor --json
 ```
 
 Or install globally:
@@ -30,7 +40,7 @@ module.
 For STDIO MCP clients:
 
 ```bash
-TELIC_REPOSITORY_ROOT=/absolute/path/to/project npx telic-mcp mcp
+TELIC_REPOSITORY_ROOT=/absolute/path/to/project npx -y telic-mcp mcp
 ```
 
 Example MCP configuration:

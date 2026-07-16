@@ -1,5 +1,12 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -322,7 +329,7 @@ describe("grounding input and fallback boundaries", () => {
       request: "inspect web",
     });
 
-    expect(result.repository_root).toBe(root);
+    expect(result.repository_root).toBe(await realpath(root));
     expect(result.manifest.pinned_refs).toContain("repo://AGENTS.md");
   });
 });

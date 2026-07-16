@@ -1,6 +1,6 @@
 # Telic source-preview API
 
-**Version:** `0.1.0` implementation, artifact schema `1.0`
+**Version:** `0.1.1` implementation, artifact schema `1.0`
 
 This is the human-oriented reference for the current source tree. The Zod schemas in `packages/protocol/src/` and the registrations in `packages/mcp/src/server-factory.ts` are authoritative. Telic has no compatibility guarantee before its first release.
 
@@ -64,6 +64,7 @@ Optional input:
 - `authorization_granted`
 - `authorization_denied`
 - `shell_execute_allowlist`: at most 256 exact, non-compound command strings
+- `network_read_domains`: at most 256 exact DNS names or IP addresses
 
 The capability vocabulary is `repository.read`, `repository.write`,
 `repository.delete`, `shell.inspect`, `shell.execute`, `runtime.inspect`,
@@ -79,6 +80,12 @@ execution. Wildcards, the legacy `authorized` placeholder, and compound shell
 syntax are rejected. An accepted `shell.inspect` action uses one of the typed
 read-only targets `git.status`, `git.diff`, `git.log`, `network.listen`,
 `process.list`, or `runtime.logs`; it is not a raw command channel.
+
+Network reads are also opt-in. `network.read` must appear in both capability
+lists, and every target URL must have an exact hostname match in
+`network_read_domains`. Schemes, paths, ports, credentials, and wildcards are
+invalid allowlist entries. Subdomains are not implied. URL ports do not change
+hostname authorization.
 
 ### `telic_ground_context`
 

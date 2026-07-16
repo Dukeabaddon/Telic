@@ -2,8 +2,9 @@
 
 **Effective date:** July 16, 2026
 
-These terms apply to the public Telic skills-only plugin. The open-source code
-in the Telic repository is separately provided under the MIT License.
+These terms apply to Telic's public Git plugin, npm package, source adapters,
+and any future skills-only directory listing. The open-source code is provided
+under the MIT License.
 
 ## Purpose
 
@@ -24,10 +25,12 @@ Users must:
 
 ## Service boundaries
 
-The skills-only plugin does not provide a hosted Telic service or guarantee that
-a host will expose particular tools, subagents, browsers, or local files. The
-optional local MCP runtime is a separate installation and is not included in the
-public skills-only submission.
+Telic does not provide a hosted service or guarantee that a host will expose
+particular tools, subagents, browsers, or local files. The Codex Git plugin
+bundles a local MCP runtime; the npm package exposes that runtime separately;
+and a future skills-only listing may omit it. Local runtimes remain subject to
+the user's operating-system permissions, host sandbox, approvals, and
+configuration.
 
 ## No warranty
 

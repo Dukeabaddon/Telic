@@ -285,13 +285,14 @@ function captureEvidence(
   harness: Harness,
   sourceRefs?: string[],
   kind: "repository" | "tool_output" | "diff" = "repository",
+  id = "evidence-01",
 ): string {
   harness.submit(
     "Evidence",
     "executor",
     {
       schemaVersion: "1.0",
-      id: "evidence-01",
+      id,
       runId: harness.runId,
       kind,
       capturedAt: "2026-07-15T10:05:00Z",
@@ -305,7 +306,7 @@ function captureEvidence(
     },
     sourceRefs,
   );
-  return `artifact://${harness.runId}/evidence-01`;
+  return `artifact://${harness.runId}/${id}`;
 }
 
 function resultBody(
@@ -647,14 +648,16 @@ describe("closure and authority conformance", () => {
         hostCapabilities: ["repository.read", "repository.write"],
       });
       submitAcceptedContract(harness, "repository.read", permissions);
-      harness.submit(
-        "WorkPlan",
-        "quality_controller",
-        planBody(harness, [1], {
-          capability: "repository.write",
-          permissions,
-        }),
-      );
+      const plan = planBody(harness, [2], {
+        capability: "repository.write",
+        permissions,
+      });
+      plan.nodes[0].allowedTools = ["repository.read", "repository.write"];
+      plan.nodes[0].requiredCapabilities = [
+        "repository.read",
+        "repository.write",
+      ];
+      harness.submit("WorkPlan", "quality_controller", plan);
       const evidenceRef = captureEvidence(harness, undefined, "diff");
       const result = resultBody(harness, "node-01", evidenceRef, {
         capability: "repository.write",
@@ -666,6 +669,74 @@ describe("closure and authority conformance", () => {
 
       expect(() => harness.submit("WorkResult", "executor", result)).toThrow(
         /completed repository\.write action lacks an exact FileChange/i,
+      );
+    });
+  });
+
+  describe("completion verification ordering", () => {
+    it("rejects a verifier scheduled before a mutating node", async () => {
+      const permissions = readPermissions();
+      permissions.repository.write = ["apps/web/src/**"];
+      const harness = await createGroundedHarness({
+        mode: "fix_only",
+        hostCapabilities: ["repository.read", "repository.write"],
+      });
+      submitAcceptedContract(harness, "repository.read", permissions);
+      const plan = planBody(harness, [1, 1], { permissions });
+      plan.nodes[0].allowedTools = ["repository.read"];
+      plan.nodes[0].requiredCapabilities = ["repository.read"];
+      plan.nodes[0].permissions = readPermissions();
+      plan.nodes[1].dependsOn = ["node-01"];
+      plan.nodes[1].allowedTools = ["repository.write"];
+      plan.nodes[1].requiredCapabilities = ["repository.write"];
+      plan.nodes[1].permissions = structuredClone(permissions);
+
+      expect(() =>
+        harness.submit("WorkPlan", "quality_controller", plan),
+      ).toThrow(/completion verification .* after mutating node/i);
+    });
+
+    it("rejects same-node verification recorded before mutation", async () => {
+      const permissions = readPermissions();
+      permissions.repository.write = ["apps/web/src/**"];
+      const harness = await createGroundedHarness({
+        mode: "fix_only",
+        hostCapabilities: ["repository.read", "repository.write"],
+      });
+      submitAcceptedContract(harness, "repository.read", permissions);
+      const plan = planBody(harness, [2], { permissions });
+      plan.nodes[0].allowedTools = ["repository.read", "repository.write"];
+      plan.nodes[0].requiredCapabilities = [
+        "repository.read",
+        "repository.write",
+      ];
+      harness.submit("WorkPlan", "quality_controller", plan);
+      const evidenceRef = captureEvidence(harness, undefined, "diff");
+      const result = resultBody(harness, "node-01", evidenceRef);
+      result.actions = [
+        result.actions[0],
+        {
+          id: "action-write",
+          capability: "repository.write",
+          target: SOURCE_PATH,
+          mutating: true,
+          status: "completed",
+          evidenceRefs: [evidenceRef],
+          rationaleSummary: "The bounded write completed.",
+        },
+      ];
+      result.filesChanged = [
+        {
+          path: SOURCE_PATH,
+          changeType: "modified",
+          beforeHash: HASH,
+          afterHash: OTHER_HASH,
+          diffRef: evidenceRef,
+        },
+      ];
+
+      expect(() => harness.submit("WorkResult", "executor", result)).toThrow(
+        /completion verification .* after the final mutating action/i,
       );
     });
   });
@@ -706,7 +777,7 @@ describe("closure and authority conformance", () => {
       );
     });
 
-    it("rejects a mutating action as support for passed verification", async () => {
+    it("rejects a mutating-only completion verification before review", async () => {
       const command = "npm test";
       const permissions = shellPermissions(command);
       const harness = await createGroundedHarness({
@@ -724,17 +795,164 @@ describe("closure and authority conformance", () => {
         }),
       );
       const evidenceRef = captureEvidence(harness, undefined, "tool_output");
+      expect(() =>
+        harness.submit(
+          "WorkResult",
+          "executor",
+          resultBody(harness, "node-01", evidenceRef, {
+            capability: "shell.execute",
+            target: command,
+            mutating: true,
+          }),
+        ),
+      ).toThrow(/completion verification .* after the final mutating action/i);
+    });
+
+    it("does not accept pre-mutation evidence when a later verifier exists in the same node", async () => {
+      const permissions = readPermissions();
+      permissions.repository.write = ["apps/web/src/**"];
+      const harness = await createGroundedHarness({
+        mode: "fix_only",
+        hostCapabilities: ["repository.read", "repository.write"],
+      });
+      submitAcceptedContract(harness, "repository.read", permissions);
+      const plan = planBody(harness, [3], { permissions });
+      plan.nodes[0].allowedTools = ["repository.read", "repository.write"];
+      plan.nodes[0].requiredCapabilities = [
+        "repository.read",
+        "repository.write",
+      ];
+      harness.submit("WorkPlan", "quality_controller", plan);
+      const oldEvidenceRef = captureEvidence(
+        harness,
+        undefined,
+        "diff",
+        "evidence-old",
+      );
+      const newEvidenceRef = captureEvidence(
+        harness,
+        undefined,
+        "diff",
+        "evidence-new",
+      );
+      const result = resultBody(harness, "node-01", newEvidenceRef);
+      result.actions = [
+        {
+          ...result.actions[0],
+          id: "action-read-old",
+          evidenceRefs: [oldEvidenceRef],
+        },
+        {
+          id: "action-write",
+          capability: "repository.write",
+          target: SOURCE_PATH,
+          mutating: true,
+          status: "completed",
+          evidenceRefs: [oldEvidenceRef],
+          rationaleSummary: "The bounded write completed.",
+        },
+        {
+          ...result.actions[0],
+          id: "action-read-new",
+          evidenceRefs: [newEvidenceRef],
+        },
+      ];
+      result.filesChanged = [
+        {
+          path: SOURCE_PATH,
+          changeType: "modified",
+          beforeHash: HASH,
+          afterHash: OTHER_HASH,
+          diffRef: oldEvidenceRef,
+        },
+      ];
+      result.evidenceRefs = [oldEvidenceRef, newEvidenceRef];
+      harness.submit("WorkResult", "executor", result);
+      const review = passingQualityReview(harness, newEvidenceRef, {
+        verificationEvidenceRef: oldEvidenceRef,
+      });
+
+      expect(() =>
+        harness.submit("QualityReview", "quality_controller", review),
+      ).toThrow(/verification .* lacks a completed capability action/i);
+    });
+
+    it("binds completion evidence to the scheduled post-mutation node", async () => {
+      const permissions = readPermissions();
+      permissions.repository.write = ["apps/web/src/**"];
+      const harness = await createGroundedHarness({
+        mode: "fix_only",
+        hostCapabilities: ["repository.read", "repository.write"],
+      });
+      submitAcceptedContract(harness, "repository.read", permissions);
+      const plan = planBody(harness, [1, 1, 1], { permissions });
+      plan.nodes[0].acceptanceCriteria = [];
+      plan.nodes[0].permissions = readPermissions();
+      plan.nodes[1].dependsOn = ["node-01"];
+      plan.nodes[1].allowedTools = ["repository.write"];
+      plan.nodes[1].requiredCapabilities = ["repository.write"];
+      plan.nodes[1].acceptanceCriteria = [];
+      plan.nodes[1].permissions = structuredClone(permissions);
+      plan.nodes[2].dependsOn = ["node-02"];
+      plan.nodes[2].permissions = readPermissions();
+      harness.submit("WorkPlan", "quality_controller", plan);
+
+      const oldEvidenceRef = captureEvidence(
+        harness,
+        undefined,
+        "repository",
+        "evidence-old",
+      );
+      const preflight = resultBody(harness, "node-01", oldEvidenceRef, {
+        id: "result-preflight",
+      });
+      preflight.acceptanceCoverage = [];
+      harness.submit("WorkResult", "executor", preflight);
+
+      const diffEvidenceRef = captureEvidence(
+        harness,
+        undefined,
+        "diff",
+        "evidence-diff",
+      );
+      const mutation = resultBody(harness, "node-02", diffEvidenceRef, {
+        id: "result-mutation",
+        capability: "repository.write",
+        target: SOURCE_PATH,
+        mutating: true,
+      });
+      mutation.acceptanceCoverage = [];
+      mutation.filesChanged = [
+        {
+          path: SOURCE_PATH,
+          changeType: "modified",
+          beforeHash: HASH,
+          afterHash: OTHER_HASH,
+          diffRef: diffEvidenceRef,
+        },
+      ];
+      harness.submit("WorkResult", "executor", mutation);
+
+      const newEvidenceRef = captureEvidence(
+        harness,
+        undefined,
+        "repository",
+        "evidence-new",
+      );
       harness.submit(
         "WorkResult",
         "executor",
-        resultBody(harness, "node-01", evidenceRef, {
-          capability: "shell.execute",
-          target: command,
-          mutating: true,
+        resultBody(harness, "node-03", newEvidenceRef, {
+          id: "result-verification",
         }),
       );
-      const review = passingQualityReview(harness, evidenceRef, {
-        capability: "shell.execute",
+      const review = passingQualityReview(harness, newEvidenceRef, {
+        verificationEvidenceRef: oldEvidenceRef,
+        workResultRefs: [
+          `artifact://${harness.runId}/result-preflight`,
+          `artifact://${harness.runId}/result-mutation`,
+          `artifact://${harness.runId}/result-verification`,
+        ],
       });
 
       expect(() =>
@@ -913,6 +1131,22 @@ describe("closure and authority conformance", () => {
   });
 
   describe("cumulative work-plan budgets and NextAction closure", () => {
+    it("rejects a WorkPlan that cannot perform required contracted verification", async () => {
+      const harness = await createGroundedHarness({
+        hostCapabilities: ["repository.read", "browser.inspect"],
+      });
+      const contractPermissions = readPermissions();
+      contractPermissions.browser.inspect = true;
+      submitAcceptedContract(harness, "browser.inspect", contractPermissions);
+      const before = ledgerSnapshot(harness);
+      const plan = planBody(harness, [1]);
+
+      expect(() =>
+        harness.submit("WorkPlan", "quality_controller", plan),
+      ).toThrow(/required verification VR-1.*browser\.inspect.*WorkPlan/i);
+      expect(ledgerSnapshot(harness)).toEqual(before);
+    });
+
     it("rejects an executable node whose budget cannot satisfy its required capabilities", async () => {
       const harness = await createGroundedHarness({
         hostCapabilities: ["repository.read", "browser.inspect"],

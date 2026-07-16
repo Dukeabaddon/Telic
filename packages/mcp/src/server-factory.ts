@@ -117,7 +117,7 @@ ${JSON.stringify(original_request)}
 Requested mode: ${requestedMode}
 
 Workflow contract:
-1. Call telic_start_run once. Pass the exact original_request and requested mode. Report the real host name, available capabilities, and only authority the user actually granted. Never infer missing permission.
+1. Call telic_start_run once. Pass the exact original_request and requested mode. Report the real host name, available capabilities, and only authority the user actually granted. For network.read, pass only explicitly approved exact hostnames in network_read_domains. Never infer missing permission.
 2. Follow the returned nextAction. For context_discovery, call telic_ground_context with the current run_id, action_id, and expected_run_version.
 3. For each phase action, inspect its bounded inputRefs with telic_get_artifact as needed. Produce exactly its required output type and schema, then call telic_submit_artifact with the current action and run version. Use telic_get_next_action only to refresh the controller state.
 4. Do not skip, reorder, or invent phases. Submit optional supporting artifacts only when the current action permits them. Keep evidence and source references attached to claims.
@@ -157,6 +157,10 @@ function registerTools(server: McpServer, service: TelicService): void {
           .array(z.string().min(1).max(2_048))
           .max(256)
           .default([]),
+        network_read_domains: z
+          .array(z.string().min(1).max(253))
+          .max(256)
+          .default([]),
       },
       annotations: {
         readOnlyHint: false,
@@ -180,6 +184,7 @@ function registerTools(server: McpServer, service: TelicService): void {
               : {}),
             authorizationDenied: input.authorization_denied,
             shellExecuteAllowlist: input.shell_execute_allowlist,
+            networkReadDomains: input.network_read_domains,
           }),
         });
       } catch (error) {
@@ -444,7 +449,7 @@ function registerTools(server: McpServer, service: TelicService): void {
 }
 
 export function createTelicMcpServer(service: TelicService): McpServer {
-  const server = new McpServer({ name: "telic", version: "0.1.0" });
+  const server = new McpServer({ name: "telic", version: "0.1.1" });
   registerPrompts(server);
   registerTools(server, service);
   return server;

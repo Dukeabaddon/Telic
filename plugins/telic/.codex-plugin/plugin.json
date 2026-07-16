@@ -1,10 +1,21 @@
 {
   "name": "telic",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Compile coding requests into permission-bounded, evidence-linked workflows with a local artifact ledger.",
   "author": {
     "name": "Telic contributors"
   },
+  "homepage": "https://github.com/Dukeabaddon/Telic",
+  "repository": "https://github.com/Dukeabaddon/Telic",
+  "license": "MIT",
+  "keywords": [
+    "agentic-coding",
+    "codex",
+    "developer-tools",
+    "evidence",
+    "mcp",
+    "workflow"
+  ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Telic",
@@ -13,10 +24,16 @@
     "developerName": "Telic contributors",
     "category": "Productivity",
     "capabilities": ["Workflow", "Local MCP", "Evidence Trace"],
+    "websiteURL": "https://github.com/Dukeabaddon/Telic",
+    "privacyPolicyURL": "https://github.com/Dukeabaddon/Telic/blob/main/PRIVACY.md",
+    "termsOfServiceURL": "https://github.com/Dukeabaddon/Telic/blob/main/TERMS.md",
+    "brandColor": "#5B5BD6",
+    "composerIcon": "./assets/telic-mark.svg",
+    "logo": "./assets/telic-mark.svg",
     "defaultPrompt": [
-      "Use Telic to diagnose this project without making changes.",
-      "Use Telic to analyze and fix this bug with evidence.",
-      "Use Telic to turn this request into a verified plan."
+      "Telic: diagnose this project without making changes.",
+      "Telic: analyze and fix this bug with evidence.",
+      "Telic: turn this request into a verified plan."
     ]
   },
   "mcpServers": "./.mcp.json"

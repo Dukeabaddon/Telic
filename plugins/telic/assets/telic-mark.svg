@@ -1,0 +1,39 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 64 64"
+  role="img"
+  aria-labelledby="title desc"
+>
+  <title id="title">Telic</title>
+  <desc id="desc">A connected path forming a precise letter T</desc>
+  <defs>
+    <linearGradient
+      id="telic-gradient"
+      x1="10"
+      y1="12"
+      x2="54"
+      y2="52"
+      gradientUnits="userSpaceOnUse"
+    >
+      <stop stop-color="#22D3EE" />
+      <stop offset="1" stop-color="#5B5BD6" />
+    </linearGradient>
+  </defs>
+  <path
+    d="M12 14h40M32 14v34"
+    fill="none"
+    stroke="url(#telic-gradient)"
+    stroke-linecap="round"
+    stroke-width="8"
+  />
+  <circle cx="12" cy="14" r="6" fill="#22D3EE" />
+  <circle cx="52" cy="14" r="6" fill="#5B5BD6" />
+  <path
+    d="m25 45 7 7 7-7"
+    fill="none"
+    stroke="#5B5BD6"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    stroke-width="5"
+  />
+</svg>

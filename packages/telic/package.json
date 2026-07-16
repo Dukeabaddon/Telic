@@ -1,6 +1,6 @@
 {
   "name": "telic-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A local MCP control plane for permission-bounded, evidence-backed agentic coding workflows.",
   "type": "module",
   "bin": {
@@ -8,7 +8,9 @@
   },
   "files": [
     "dist/",
-    "README.md"
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "engines": {
     "node": ">=24.15.0"

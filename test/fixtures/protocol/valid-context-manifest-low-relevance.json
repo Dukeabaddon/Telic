@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "id": "context-wire-relevance",
+  "run_id": "run-01",
+  "repository_fingerprint": {
+    "head_commit": null,
+    "dirty_worktree_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "pinned_refs": [],
+  "selected_sources": [],
+  "derived_refs": [],
+  "excluded_candidates": [{ "reason": "low_relevance", "count": 4 }],
+  "inventory_source": "git",
+  "warnings": ["Unpinned zero-relevance context was capped at 8 files."],
+  "budget": {
+    "max_files": 48,
+    "max_file_bytes": 131072,
+    "max_total_bytes": 524288,
+    "max_inventory_files": 20000,
+    "candidate_files": 4,
+    "selected_files": 0,
+    "selected_bytes": 0,
+    "estimated_tokens": 0
+  }
+}

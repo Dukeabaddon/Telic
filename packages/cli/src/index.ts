@@ -17,7 +17,7 @@ const defaultIo: CliIo = {
 
 function usage(): string {
   return [
-    "Telic 0.1.0",
+    "Telic 0.1.1",
     "",
     "Usage:",
     "  telic doctor [--repo PATH] [--json]",

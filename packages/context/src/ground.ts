@@ -53,6 +53,7 @@ const HARD_LIMITS: GroundingBudget = {
 
 const REQUEST_CHARACTER_LIMIT = 32_768;
 const BINARY_PREFIX_BYTES = 8_192;
+const MAX_ZERO_SCORE_FALLBACK_FILES = 8;
 
 function sha256(value: Uint8Array | string): `sha256:${string}` {
   return `sha256:${createHash("sha256").update(value).digest("hex")}`;
@@ -357,8 +358,17 @@ export async function groundRepository(
   const hashesByPath = new Map<string, string>();
   const selectedHashes = new Set<string>();
   let selectedBytes = 0;
+  let selectedZeroScoreFallbacks = 0;
 
   for (const candidate of ranked) {
+    if (
+      !candidate.pinned &&
+      candidate.score === 0 &&
+      selectedZeroScoreFallbacks >= MAX_ZERO_SCORE_FALLBACK_FILES
+    ) {
+      increment(exclusions, "low_relevance");
+      continue;
+    }
     if (selectedSources.length >= budget.max_files) {
       increment(exclusions, "file_count_budget");
       continue;
@@ -441,6 +451,9 @@ export async function groundRepository(
       score: candidate.score,
       pinned: candidate.pinned,
     });
+    if (!candidate.pinned && candidate.score === 0) {
+      selectedZeroScoreFallbacks += 1;
+    }
     documents.push({
       ref,
       path: candidate.path,
@@ -448,6 +461,12 @@ export async function groundRepository(
       size_bytes: readResult.bytes.byteLength,
       content: readResult.content,
     });
+  }
+
+  if ((exclusions.get("low_relevance") ?? 0) > 0) {
+    warnings.push(
+      `Unpinned zero-relevance context was capped at ${String(MAX_ZERO_SCORE_FALLBACK_FILES)} files.`,
+    );
   }
 
   const fingerprintResult = await fingerprintRepository(

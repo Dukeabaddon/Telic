@@ -2,26 +2,57 @@ import { isInstructionPath } from "./security.js";
 
 const STOP_WORDS = new Set([
   "a",
+  "about",
   "an",
   "and",
   "are",
+  "as",
+  "at",
+  "be",
+  "by",
   "can",
   "check",
+  "code",
+  "com",
   "could",
+  "do",
+  "does",
+  "file",
+  "fix",
   "for",
   "from",
+  "have",
+  "how",
   "in",
+  "investigate",
   "is",
   "it",
+  "me",
+  "my",
   "of",
   "on",
+  "or",
   "please",
   "project",
+  "report",
+  "review",
+  "so",
+  "task",
+  "that",
   "the",
   "this",
   "to",
+  "use",
+  "using",
+  "we",
+  "what",
+  "when",
+  "where",
+  "who",
   "why",
+  "will",
   "with",
+  "would",
   "you",
 ]);
 
@@ -36,14 +67,31 @@ function lexicalCompare(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
+function normalizeToken(token: string): string {
+  if (
+    token.length > 4 &&
+    token.endsWith("s") &&
+    !token.endsWith("ss") &&
+    !token.endsWith("is") &&
+    !token.endsWith("us")
+  ) {
+    return token.slice(0, -1);
+  }
+  return token;
+}
+
+function tokens(value: string): readonly string[] {
+  const separated = value.replaceAll(/([a-z0-9])([A-Z])/g, "$1 $2");
+  return (separated.toLowerCase().match(/[a-z0-9]+/gu) ?? []).map(
+    normalizeToken,
+  );
+}
+
 function requestTerms(request: string): readonly string[] {
-  const matches = request.toLowerCase().match(/[a-z0-9][a-z0-9._/-]*/gu) ?? [];
   const terms = new Set<string>();
-  for (const match of matches) {
-    for (const term of match.split(/[./_-]+/u)) {
-      if (term.length >= 2 && !STOP_WORDS.has(term)) {
-        terms.add(term);
-      }
+  for (const term of tokens(request)) {
+    if (term.length >= 2 && !STOP_WORDS.has(term)) {
+      terms.add(term);
     }
   }
   return [...terms].sort(lexicalCompare);
@@ -59,6 +107,21 @@ function requestPathHints(request: string): readonly string[] {
   ].sort(lexicalCompare);
 }
 
+function isRootProjectMetadata(path: string): boolean {
+  if (path.includes("/")) return false;
+  return (
+    path === "package.json" ||
+    path === "package-lock.json" ||
+    path === "pyproject.toml" ||
+    path === "cargo.toml" ||
+    path === "go.mod" ||
+    path === "readme" ||
+    path.startsWith("readme.") ||
+    path === "tsconfig.json" ||
+    (path.startsWith("tsconfig.") && path.endsWith(".json"))
+  );
+}
+
 export function rankCandidates(
   paths: readonly string[],
   request: string,
@@ -70,7 +133,8 @@ export function rankCandidates(
 
   const ranked = paths.map((path): RankedCandidate => {
     const lowerPath = path.toLowerCase();
-    const basename = lowerPath.split("/").at(-1) ?? lowerPath;
+    const pathTokens = new Set(tokens(path));
+    const basenameTokens = new Set(tokens(path.split("/").at(-1) ?? path));
     const instruction = isInstructionPath(path);
     const activeExact = active.has(lowerPath);
     const activeAncestor = [...active].some(
@@ -79,15 +143,13 @@ export function rankCandidates(
         lowerPath.startsWith(`${activePath}/`),
     );
     const matchingHints = pathHints.filter(
-      (hint) =>
-        lowerPath === hint ||
-        lowerPath.endsWith(`/${hint}`) ||
-        lowerPath.includes(hint),
+      (hint) => lowerPath === hint || lowerPath.endsWith(`/${hint}`),
     );
-    const matchingTerms = terms.filter((term) => lowerPath.includes(term));
+    const matchingTerms = terms.filter((term) => pathTokens.has(term));
     const basenameTerms = matchingTerms.filter((term) =>
-      basename.includes(term),
+      basenameTokens.has(term),
     );
+    const projectMetadata = isRootProjectMetadata(lowerPath);
 
     const pinned = instruction || activeExact;
     let score = pinned ? 1_000_000 : 0;
@@ -95,12 +157,7 @@ export function rankCandidates(
     score += matchingHints.length * 5_000;
     score += basenameTerms.length * 250;
     score += (matchingTerms.length - basenameTerms.length) * 75;
-    score +=
-      /(?:^|\/)(?:readme|package|tsconfig|pyproject|cargo|go\.mod)/u.test(
-        lowerPath,
-      )
-        ? 20
-        : 0;
+    score += projectMetadata ? 20 : 0;
 
     let reason: string;
     if (instruction) {
@@ -113,6 +170,8 @@ export function rankCandidates(
       reason = `Path matches request terms: ${matchingTerms.slice(0, 5).join(", ")}.`;
     } else if (activeAncestor) {
       reason = "Path is adjacent to an active host path.";
+    } else if (projectMetadata) {
+      reason = "Root project metadata selected for bounded baseline context.";
     } else {
       reason =
         "Repository source selected by the deterministic budget fallback.";

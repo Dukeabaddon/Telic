@@ -43,6 +43,7 @@ interface HarnessOptions {
   hostCapabilities?: string[];
   authorizationGranted?: string[];
   shellExecuteAllowlist?: string[];
+  networkReadDomains?: string[];
 }
 
 const RULE_REF = "repo://AGENTS.md";
@@ -113,6 +114,9 @@ function permissionsFor(
       break;
     case "browser.inspect":
       permissions.browser.inspect = true;
+      break;
+    case "network.read":
+      permissions.network.readDomains = scopes;
       break;
     default:
       throw new Error(`Unsupported test capability: ${capability}`);
@@ -185,6 +189,9 @@ async function createFramedHarness(
     authorizationGranted,
     ...(options.shellExecuteAllowlist
       ? { shellExecuteAllowlist: options.shellExecuteAllowlist }
+      : {}),
+    ...(options.networkReadDomains
+      ? { networkReadDomains: options.networkReadDomains }
       : {}),
   });
   await service.groundContext({
@@ -299,8 +306,12 @@ function submitExecutablePipeline(
   );
   const plan = harness.body("WorkPlan");
   plan.nodes[0].contextRefs = [SOURCE_REF];
-  plan.nodes[0].allowedTools = [capability];
-  plan.nodes[0].requiredCapabilities = [capability];
+  plan.nodes[0].allowedTools = [
+    ...new Set([capability, verificationCapability]),
+  ];
+  plan.nodes[0].requiredCapabilities = [
+    ...new Set([capability, verificationCapability]),
+  ];
   plan.nodes[0].permissions = structuredClone(permissions);
   plan.nodes[0].acceptanceCriteria = ["AC-1"];
   plan.nodes[0].budgets.maximumToolCalls = 4;
@@ -608,6 +619,7 @@ describe("trust-boundary conformance", () => {
                 "src/fix.ts",
                 actionEvidenceRef,
               ),
+              completedAction("repository.read", SOURCE_PATH, badDiffRef),
             ],
             filesChanged: [
               {
@@ -694,6 +706,49 @@ describe("trust-boundary conformance", () => {
           }),
         ),
       ).toThrow(/ContextDocument cannot prove an executed outcome.*outputRef/i);
+    });
+  });
+
+  describe("permission trace redaction", () => {
+    it("never persists credentials from a denied network target", async () => {
+      const harness = await createFramedHarness({
+        hostCapabilities: ["network.read"],
+        authorizationGranted: ["network.read"],
+        networkReadDomains: ["api.example.com"],
+      });
+      submitExecutablePipeline(
+        harness,
+        "network.read",
+        permissionsFor("network.read", ["api.example.com"]),
+      );
+      const evidenceRef = captureEvidence(
+        harness,
+        "evidence-01",
+        "tool_output",
+      );
+      const credential = "trace-secret-value";
+      const querySecret = "query-secret-value";
+
+      expect(() =>
+        harness.submit(
+          "WorkResult",
+          "executor",
+          completedResult(harness, evidenceRef, {
+            actions: [
+              completedAction(
+                "network.read",
+                `https://user:${credential}@api.example.com/v1/items?token=${querySecret}#private`,
+                evidenceRef,
+              ),
+            ],
+          }),
+        ),
+      ).toThrow(/permission|outside node/i);
+
+      const trace = JSON.stringify(harness.service.getTrace(harness.runId));
+      expect(trace).not.toContain(credential);
+      expect(trace).not.toContain(querySecret);
+      expect(trace).toContain('"scope":"api.example.com"');
     });
   });
 

@@ -60,6 +60,7 @@ export interface StartRunRequest {
   authorizationGranted?: string[];
   authorizationDenied?: string[];
   shellExecuteAllowlist?: string[];
+  networkReadDomains?: string[];
 }
 
 export interface GroundContextRequest {
@@ -413,6 +414,9 @@ export class TelicService {
         denied,
         ...(input.shellExecuteAllowlist
           ? { shellExecuteAllowlist: input.shellExecuteAllowlist }
+          : {}),
+        ...(input.networkReadDomains
+          ? { networkReadDomains: input.networkReadDomains }
           : {}),
       },
     });

@@ -1,8 +1,8 @@
-# Source-preview demo
+# Codex public-preview demo
 
-This guide demonstrates the current Codex plugin from source. It also explains
-how the local MCP process fits the six experimental host packs. The portable CLI
-can be installed from npm, but Telic is not a certified Antigravity integration.
+This guide demonstrates the public Codex Git plugin. It also explains how the
+local MCP process fits the six experimental host packs. Source development is
+an alternate path; Telic is not a certified Antigravity integration.
 
 ## What the demo proves
 
@@ -19,22 +19,23 @@ model, provides hidden chain-of-thought, or supports an untested host surface.
 
 ## Prepare Telic
 
-For a quick MCP-only demo, verify the npm package:
+For a quick MCP-only demo, verify the npm package from the target project:
 
 ```bash
-npx telic-mcp doctor --json
+npx -y telic-mcp doctor --json
 ```
 
-For the Codex source plugin demo, build from source.
+The public Codex plugin path does not require cloning or building Telic.
 
 Requirements:
 
 - Node.js `>=24.15.0`;
 - npm;
+- Git for the public marketplace install;
 - a working Codex installation with plugin support; and
-- optional Git and ripgrep.
+- optional ripgrep for faster runtime inventory.
 
-From the Telic checkout:
+Only when developing Telic from a source checkout:
 
 ```bash
 npm ci
@@ -48,19 +49,21 @@ small test project without secrets.
 
 ## Install the local Codex plugin
 
-Still in the Telic checkout:
+For the shortest public demo path:
 
 ```bash
-codex plugin marketplace add "$PWD/.agents/plugins" --json
-codex plugin list --available --json
-codex plugin add telic@personal --json
+codex plugin marketplace add Dukeabaddon/Telic --json
+codex plugin add telic@dukeabaddon-telic --json
 codex plugin list --json
 codex mcp list --json
 ```
 
-The marketplace command may return a different configured name if `personal`
-already exists. Use the returned name when installing or removing the plugin.
-Start a fresh Codex session after installation.
+For local source development after `npm run build`, replace the first command
+with `codex plugin marketplace add "$PWD" --json` from the Telic checkout.
+
+The repository uses the stable marketplace ID `dukeabaddon-telic`, so it does
+not conflict with a user's personal marketplace. Start a fresh Codex session
+after installation.
 
 ## Codex extension inside Antigravity
 
@@ -72,7 +75,7 @@ panel has separate configuration and does not automatically receive tools from
 the Codex extension.
 
 1. Confirm the Codex extension opens and works in Antigravity.
-2. Build and install Telic through the Codex commands above.
+2. Install Telic through the Codex commands above.
 3. Reload the editor or start a new Codex chat.
 4. Open the separate target project in Antigravity.
 5. Open the Codex panel, not the native Antigravity Agent panel.
@@ -82,10 +85,10 @@ the Codex extension.
 Suggested demo request:
 
 ```text
-Use $telic:telic to investigate why this project is not talking to its API.
-Analyze only. Do not change files. Inspect repository evidence and available
-runtime evidence. If browser or DevTools access is unavailable, say so instead
-of inventing results.
+Telic: investigate why this project is not talking to its API. Analyze only.
+Do not change files. Inspect repository evidence and available runtime evidence.
+If browser or DevTools access is unavailable, say so instead of inventing
+results.
 ```
 
 Expected high-level flow:
@@ -107,18 +110,18 @@ model API.
 
 ## Inspect the run
 
-Record the run ID shown by the workflow. From the Telic checkout, point the CLI
-at the target repository:
+Record the run ID shown by the workflow. Run the published CLI from any
+terminal and point it at the target repository:
 
 ```bash
-node packages/cli/dist/bin.js status RUN_ID --repo /absolute/path/to/target --json
-node packages/cli/dist/bin.js trace RUN_ID --repo /absolute/path/to/target --json
+npx -y telic-mcp status RUN_ID --repo /absolute/path/to/target --json
+npx -y telic-mcp trace RUN_ID --repo /absolute/path/to/target --json
 ```
 
 Inspect one artifact when useful:
 
 ```bash
-node packages/cli/dist/bin.js artifact RUN_ID ARTIFACT_ID \
+npx -y telic-mcp artifact RUN_ID ARTIFACT_ID \
   --repo /absolute/path/to/target --json
 ```
 
@@ -128,7 +131,7 @@ the same prefix for every inspection command:
 
 ```bash
 TELIC_STATE_DIR="$HOME/.local/state/telic-demo" \
-  node packages/cli/dist/bin.js status RUN_ID \
+  npx -y telic-mcp status RUN_ID \
     --repo /absolute/path/to/target --json
 ```
 
@@ -171,7 +174,7 @@ rule, command, permission, and MCP configuration surfaces. An extension inside
 an editor is still its own host boundary. One extension cannot assume access to
 another extension's registered MCP tools or conversation.
 
-The repository includes experimental packs for all six hosts. Their activation
+The portable human request is `Telic: <your request>`. Host-native fallback
 syntax differs: Codex uses `/skills` or `$telic:telic`, Claude Code uses
 `/telic:telic`, Antigravity CLI, Cursor, Cline, and Roo use `/telic`, and Kiro
 uses `/agent swap telic` followed by `/telic`. These packs remain previews until
@@ -200,11 +203,9 @@ and invalidate review conclusions.
 
 ## Remove the local preview
 
-Use the marketplace name reported by Codex:
-
 ```bash
-codex plugin remove telic@personal --json
-codex plugin marketplace remove personal --json
+codex plugin remove telic@dukeabaddon-telic --json
+codex plugin marketplace remove dukeabaddon-telic --json
 ```
 
 Removal does not delete the Telic checkout or its XDG state. Review and remove

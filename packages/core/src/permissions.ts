@@ -1,4 +1,5 @@
 import { existsSync, realpathSync } from "node:fs";
+import { isIP } from "node:net";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { matchesGlob } from "node:path";
 
@@ -64,6 +65,48 @@ export function shellInspectionTargetIsSafe(target: string): boolean {
   return safeShellInspectionTargets.has(target);
 }
 
+export function normalizeNetworkReadDomain(value: string): string | null {
+  const candidate = value.trim().toLowerCase();
+  if (candidate.length === 0 || candidate.length > 253) return null;
+  const unbracketed =
+    candidate.startsWith("[") && candidate.endsWith("]")
+      ? candidate.slice(1, -1)
+      : candidate;
+  if (isIP(unbracketed) !== 0) return unbracketed;
+  if (candidate === "localhost") return candidate;
+  if (candidate.includes("://") || /[/?#@:*]/u.test(candidate)) return null;
+  const labels = candidate.split(".");
+  if (
+    labels.some(
+      (label) =>
+        label.length === 0 ||
+        label.length > 63 ||
+        !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/u.test(label),
+    )
+  ) {
+    return null;
+  }
+  return candidate;
+}
+
+function networkTargetHostname(target: string): string | null {
+  try {
+    const parsed = new URL(
+      target.includes("://") ? target : `http://${target}`,
+    );
+    if (
+      (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
+      parsed.username.length > 0 ||
+      parsed.password.length > 0
+    ) {
+      return null;
+    }
+    return normalizeNetworkReadDomain(parsed.hostname);
+  } catch {
+    return null;
+  }
+}
+
 function safeRelativeTarget(
   repositoryRoot: string,
   target: string,
@@ -116,23 +159,18 @@ function grantMatches(
     : request.target;
   if (target === null) return false;
 
+  if (request.kind === "network.read") {
+    const hostname = networkTargetHostname(target);
+    if (hostname === null) return false;
+    return grant.scopes.some((scope) => {
+      if (scope === "**") return true;
+      return normalizeNetworkReadDomain(scope) === hostname;
+    });
+  }
+
   return grant.scopes.some((scope) => {
     if (scope === "**") return true;
     if (request.kind === "shell.execute") return target === scope;
-    if (scope === "local" && request.kind === "network.read") {
-      try {
-        const hostname = new URL(
-          target.includes("://") ? target : `http://${target}`,
-        ).hostname;
-        return (
-          hostname === "localhost" ||
-          hostname === "127.0.0.1" ||
-          hostname === "::1"
-        );
-      } catch {
-        return false;
-      }
-    }
     return matchesGlob(target, scope);
   });
 }
@@ -214,7 +252,7 @@ export function policyForMode(mode: IntentMode): PermissionPolicy {
       { kind: "shell.inspect" },
       { kind: "runtime.inspect" },
       { kind: "browser.inspect" },
-      { kind: "network.read", scopes: ["local"] },
+      { kind: "network.read" },
     );
   }
   if (mode === "fix_only" || mode === "analyze_and_fix") {

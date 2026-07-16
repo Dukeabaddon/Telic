@@ -51,13 +51,13 @@ export const WorkPlanSchema = z
     id: IdentifierSchema,
     runId: RunIdSchema,
     taskContractRef: ArtifactUriSchema,
-    executionMode: z.enum(["serial", "parallel", "mixed"]),
+    executionMode: z.literal("serial"),
     nodes: z.array(WorkNodeSchema).min(1).max(64),
     joinRules: z.array(BoundedTextSchema).max(64),
     globalBudgets: z
       .object({
         maximumToolCalls: z.number().int().min(0).max(4_000),
-        maximumParallelWorkers: z.number().int().min(1).max(16),
+        maximumParallelWorkers: z.literal(1),
         maximumSubagentDepth: z.number().int().min(0).max(4),
       })
       .strict(),
@@ -117,17 +117,6 @@ export const WorkPlanSchema = z
         code: "custom",
         path: ["nodes"],
         message: "WorkPlan nodes must form a directed acyclic graph",
-      });
-    }
-
-    if (
-      plan.executionMode === "serial" &&
-      plan.globalBudgets.maximumParallelWorkers !== 1
-    ) {
-      context.addIssue({
-        code: "custom",
-        path: ["globalBudgets", "maximumParallelWorkers"],
-        message: "Serial plans must use exactly one parallel worker",
       });
     }
   });

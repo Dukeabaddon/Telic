@@ -76,6 +76,10 @@ describe("MCP transport", () => {
       listed.tools.find((tool) => tool.name === "telic_ground_context")
         ?.annotations?.readOnlyHint,
     ).toBe(false);
+    expect(
+      listed.tools.find((tool) => tool.name === "telic_start_run")?.inputSchema
+        .properties,
+    ).toHaveProperty("network_read_domains");
 
     const prompts = await client.listPrompts();
     expect(prompts.prompts).toEqual([
@@ -127,6 +131,31 @@ describe("MCP transport", () => {
       nextAction: { id: string; phase: string };
     };
     expect(startBody.nextAction.phase).toBe("context_discovery");
+
+    const networkStarted = await client.callTool({
+      name: "telic_start_run",
+      arguments: {
+        original_request: "Inspect the approved public API.",
+        mode: "analyze_only",
+        host_capabilities: ["network.read"],
+        authorization_granted: ["network.read"],
+        network_read_domains: ["api.example.com"],
+      },
+    });
+    expect(networkStarted.isError).not.toBe(true);
+    const networkStartBody = networkStarted.structuredContent as {
+      run: { runId: string };
+    };
+    expect(
+      service.getArtifact(
+        networkStartBody.run.runId,
+        networkStartBody.run.runId,
+      ).body,
+    ).toMatchObject({
+      authorization: {
+        granted: { network: { readDomains: ["api.example.com"] } },
+      },
+    });
 
     const stale = await client.callTool({
       name: "telic_ground_context",

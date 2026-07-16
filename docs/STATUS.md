@@ -6,17 +6,17 @@ Telic is an executable, local source preview. It is suitable for development and
 
 ## Current vertical slice
 
-| Area            | Current behavior                                                                                                                                                          |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Protocol        | Strict Zod v4 schemas for controller, intent, execution, evidence, release, and trace artifacts; canonical bodies use camelCase and `schemaVersion: "1.0"`                |
-| Controller      | Deterministic phase ordering, one user-facing clarification, one contract revision, one shared post-execution remediation, terminal reports, and mode-aware phase routing |
-| Persistence     | SQLite metadata/events plus immutable SHA-256-addressed JSON bodies; digest verification occurs on read                                                                   |
-| Context         | Bounded Git, ripgrep, or filesystem inventory; deterministic ranking; file/count/byte budgets; realpath and symlink containment; duplicate and heuristic secret exclusion |
-| MCP             | Local STDIO server with seven tools plus a host-neutral `telic_workflow` prompt                                                                                           |
-| CLI             | npm-packaged and source-built `doctor`, `status`, `trace`, `artifact`, and `mcp` commands                                                                                 |
-| Host package    | Codex reference plugin plus six experimental source packs generated from one canonical skill and MCP bundle                                                               |
-| Model access    | None in the runtime; the active host model authors semantic artifacts                                                                                                     |
-| Network service | None required; normal transport is local STDIO                                                                                                                            |
+| Area            | Current behavior                                                                                                                                                         |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Protocol        | Strict Zod v4 schemas for controller, intent, serial execution, evidence, release, and trace artifacts; canonical bodies use camelCase and `schemaVersion: "1.0"`        |
+| Controller      | Deterministic phase ordering, stage-aware verification preflight, one user-facing clarification, one contract revision, one shared remediation, and terminal reports     |
+| Persistence     | SQLite metadata/events plus immutable SHA-256-addressed JSON bodies; digest verification occurs on read                                                                  |
+| Context         | Bounded inventory; token-boundary path ranking; eight-file zero-score fallback cap; relevance/file/byte budgets; path, symlink, duplicate, and heuristic secret controls |
+| MCP             | Local STDIO server with seven tools plus a host-neutral `telic_workflow` prompt                                                                                          |
+| CLI             | npm-packaged and source-built `doctor`, `status`, `trace`, `artifact`, and `mcp` commands                                                                                |
+| Host package    | Codex reference plugin plus six experimental source packs generated from one canonical skill and MCP bundle                                                              |
+| Model access    | None in the runtime; the active host model authors semantic artifacts                                                                                                    |
+| Network service | None required; normal transport is local STDIO                                                                                                                           |
 
 Automated checks cover protocol fixtures/invariants, controller transitions, permissions, ledger behavior, context selection/security controls, MCP service/tools, CLI behavior, an end-to-end artifact pipeline, and the standalone plugin handshake. The current verification commands are listed in [Installation](INSTALLATION.md); test totals are intentionally not frozen in prose.
 
@@ -33,7 +33,11 @@ choices terminate the current run; a permission expansion must be expressed in a
 new run. A second material boundary is recorded for audit but routes to a blocked
 report without another user question.
 
-The canonical Telic skill is the semantic driver. Compatible MCP clients may
+The canonical Telic skill is the semantic driver and remains explicitly opt-in.
+Description matching is enabled only so a request that asks for Telic by name,
+such as `Telic: <your request>`, can resolve without a qualified host command.
+Questions and discussions about Telic itself remain outside the workflow.
+Compatible MCP clients may
 instead retrieve the host-neutral `telic_workflow` prompt. Telic does not
 automatically intercept user prompts, invoke a host model, or guarantee separate
 agents. The run records whether native subagents are available, but the current
@@ -41,7 +45,7 @@ controller accepts serial WorkPlans only and does not schedule parallel workers.
 
 ## Security reality
 
-Current controls include strict schemas, bounded inputs, missing-reference rejection, cross-run checks, transitive phase-input closure, content digests, local state permissions, repository containment, path/symlink rejection, context budgets, secret-like filename exclusion, heuristic content-secret detection, exact shell-command allowlisting, typed read-only shell targets, evidence-kind checks, and trace-safe summaries.
+Current controls include strict schemas, bounded inputs, missing-reference rejection, cross-run checks, transitive phase-input closure, content digests, local state permissions, repository containment, path/symlink rejection, context budgets, secret-like filename exclusion, heuristic content-secret detection, exact shell-command allowlisting, exact network-read hostname allowlisting, typed read-only shell targets, evidence-kind checks, and trace-safe summaries.
 
 Important limits:
 
@@ -67,7 +71,8 @@ Important limits:
   honest blocked `UserReport`; an explicit cancellation or new-run clarification
   choice terminates the current run with a null report reference.
 
-This project is not a security boundary against a compromised host, OS account, or deliberately unsafe tool policy.
+This project is not a security boundary against a compromised host, OS account,
+or deliberately unsafe tool policy.
 
 ## Not shipped yet
 
@@ -76,7 +81,7 @@ This project is not a security boundary against a compromised host, OS account, 
 - browser/DevTools providers and provider-driven evidence capture (the generic typed browser Evidence kind exists)
 - host-enforced mediation of every repository, shell, runtime, network, or browser action
 - visual inspector or web application
-- remote marketplace, signed release artifact, or full clean-machine lifecycle certification
+- curated Codex directory listing, signed release artifact, or full clean-machine lifecycle certification
 - native parallel-work scheduling guarantees across hosts
 - runtime Tree-sitter/LSP/code-graph retrieval and lossy semantic compression (development-only Graphifyy/Gate-MCP use is recorded separately)
 - team sync, remote storage, telemetry, or hosted model service
@@ -88,8 +93,8 @@ This project is not a security boundary against a compromised host, OS account, 
 ## Platform and distribution claim
 
 The npm package provides the portable `telic` CLI and STDIO MCP server. The
-source-built Codex plugin has a local marketplace entry and bundled Node.js MCP
-server. Six additional source packs pass repository validation and a local STDIO
+Codex plugin is installable through this repository's public Git marketplace
+and bundles a Node.js MCP server. Six additional source packs pass repository validation and a local STDIO
 contract smoke test; Antigravity and Kiro also pass locally installed CLI schema
 validators. That is not the same as a published host marketplace release or
 real-host certification. Linux x86-64 is the active development environment.

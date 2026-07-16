@@ -10,6 +10,7 @@ import {
   QualityReviewSchema,
   RunEnvelopeSchema,
   TaskContractSchema,
+  WorkPlanSchema,
   normalizeContextManifestWire,
   parseArtifactBody,
   parseArtifactEnvelope,
@@ -55,6 +56,19 @@ describe("golden protocol artifacts", () => {
     expect(
       PromptReviewSchema.parse(fixture("valid-prompt-review-revise.json")),
     ).toMatchObject({ decision: "revise", revisionNumber: 0 });
+  });
+
+  it("accepts the serial WorkPlan fixture", () => {
+    expect(
+      WorkPlanSchema.parse(fixture("valid-work-plan-serial.json")),
+    ).toMatchObject({ executionMode: "serial" });
+  });
+
+  it("rejects an unsupported parallel WorkPlan fixture", () => {
+    expect(
+      WorkPlanSchema.safeParse(fixture("invalid-work-plan-parallel.json"))
+        .success,
+    ).toBe(false);
   });
 
   it("accepts an evidence-gated analyze-and-fix progression", () => {
@@ -139,6 +153,22 @@ describe("golden protocol artifacts", () => {
         },
       ],
     });
+  });
+
+  it("accepts low-relevance context exclusions", () => {
+    expect(
+      ContextManifestWireSchema.parse(
+        fixture("valid-context-manifest-low-relevance.json"),
+      ).excluded_candidates,
+    ).toEqual([{ reason: "low_relevance", count: 4 }]);
+  });
+
+  it("rejects unknown context exclusion reasons", () => {
+    expect(
+      ContextManifestWireSchema.safeParse(
+        fixture("invalid-context-manifest-exclusion.json"),
+      ).success,
+    ).toBe(false);
   });
 
   it("validates a discriminated immutable ArtifactEnvelope", () => {

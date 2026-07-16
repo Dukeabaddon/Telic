@@ -1,6 +1,6 @@
 {
   "name": "telic-workspace",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "A model-independent intent compiler and evidence-driven control plane for coding agents.",
   "type": "module",

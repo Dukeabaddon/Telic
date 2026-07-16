@@ -23,13 +23,13 @@ open port, or global npm install is required.
 Run without installing globally:
 
 ```bash
-npx telic doctor --json
+npx telic-mcp doctor --json
 ```
 
 Or install the CLI:
 
 ```bash
-npm install -g telic
+npm install -g telic-mcp
 telic doctor --json
 ```
 
@@ -40,7 +40,7 @@ For a STDIO MCP client, use:
   "mcpServers": {
     "telic": {
       "command": "npx",
-      "args": ["-y", "telic", "mcp"],
+      "args": ["-y", "telic-mcp", "mcp"],
       "env": {
         "TELIC_REPOSITORY_ROOT": "/absolute/path/to/target-project"
       }
@@ -85,7 +85,7 @@ machine-local validator before bootstrapping. Those official scripts are not a
 repository dependency and are therefore not required by portable CI.
 
 Most workspace packages are private implementation packages. `npm ci` installs
-them for development; the public package is `telic`.
+them for development; the public package is `telic-mcp`.
 
 ## Run the local MCP server
 
@@ -271,28 +271,19 @@ Run `npm run build`, validate the plugin, inspect `codex plugin list --json` and
 
 Grounding falls back to the filesystem and records the selected inventory source and warnings. Install them only if desired; Telic does not install global tools.
 
-## Release installation target
+## Release installation status
 
-Before the preview becomes a release, the project still needs a public
-repository/package decision, a pinned remote marketplace or equivalent artifact,
-checksums/provenance, clean-machine install and uninstall evidence, tested
-upgrade behavior, and a monitored vulnerability-reporting channel. Until then,
-do not present source-preview commands as a stable end-user installation
-contract.
-
-### Planned `npx` shape
-
-The simplest public distribution is one bundled runner rather than five
-independently versioned workspace packages. A future package could expose:
+The public npm package is one bundled runner rather than five independently
+versioned workspace packages:
 
 ```bash
-npx -y telic doctor
-npx -y telic mcp
+npx -y telic-mcp doctor
+npx -y telic-mcp mcp
 ```
 
-Publication requires a chosen available package name, npm account or
-organization ownership, explicit public-publish approval, trusted-publisher or
-local npm authentication, and a monitored vulnerability-reporting contact. The
-package still needs `bin`, an exact file allowlist, license/repository metadata,
-packed-tarball inspection, clean temporary installation, doctor, and MCP
-handshake tests. It does not need a model API key.
+The package has a `bin`, exact file allowlist, license/repository metadata,
+packed-tarball inspection, clean temporary installation, doctor smoke test, and
+MCP coverage through the repository test suite. Remaining distribution work is
+trusted publishing/provenance, clean-machine install and uninstall evidence,
+tested upgrade behavior, and a monitored vulnerability-reporting channel. It
+does not need a model API key.

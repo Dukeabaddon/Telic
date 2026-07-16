@@ -63,7 +63,7 @@ requires a new run. It does not run an unlimited autonomous loop.
 
 ## What is included
 
-- `telic` — npm-distributed `telic` CLI and local STDIO MCP server.
+- `telic-mcp` — npm-distributed `telic` CLI and local STDIO MCP server.
 - `@telic/protocol` — strict Zod artifact schemas and cross-field contracts.
 - `@telic/core` — deterministic state machine, permissions, budgets, SQLite
   metadata, and immutable content-addressed artifact bodies.
@@ -86,7 +86,7 @@ optional.
 Run without installing globally:
 
 ```bash
-npx telic doctor --json
+npx telic-mcp doctor --json
 ```
 
 Use the bundled STDIO MCP server from any MCP-compatible host:
@@ -96,7 +96,7 @@ Use the bundled STDIO MCP server from any MCP-compatible host:
   "mcpServers": {
     "telic": {
       "command": "npx",
-      "args": ["-y", "telic", "mcp"],
+      "args": ["-y", "telic-mcp", "mcp"],
       "env": {
         "TELIC_REPOSITORY_ROOT": "/absolute/path/to/target-project"
       }

@@ -22,7 +22,7 @@ model, provides hidden chain-of-thought, or supports an untested host surface.
 For a quick MCP-only demo, verify the npm package:
 
 ```bash
-npx telic doctor --json
+npx telic-mcp doctor --json
 ```
 
 For the Codex source plugin demo, build from source.

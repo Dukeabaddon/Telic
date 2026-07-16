@@ -23,13 +23,13 @@ open port, or global npm install is required.
 Run without installing globally:
 
 ```bash
-npx @dukeabaddon/telic doctor --json
+npx telic doctor --json
 ```
 
 Or install the CLI:
 
 ```bash
-npm install -g @dukeabaddon/telic
+npm install -g telic
 telic doctor --json
 ```
 
@@ -40,7 +40,7 @@ For a STDIO MCP client, use:
   "mcpServers": {
     "telic": {
       "command": "npx",
-      "args": ["-y", "@dukeabaddon/telic", "mcp"],
+      "args": ["-y", "telic", "mcp"],
       "env": {
         "TELIC_REPOSITORY_ROOT": "/absolute/path/to/target-project"
       }
@@ -85,7 +85,7 @@ machine-local validator before bootstrapping. Those official scripts are not a
 repository dependency and are therefore not required by portable CI.
 
 Most workspace packages are private implementation packages. `npm ci` installs
-them for development; the public package is `@dukeabaddon/telic`.
+them for development; the public package is `telic`.
 
 ## Run the local MCP server
 
@@ -286,8 +286,8 @@ The simplest public distribution is one bundled runner rather than five
 independently versioned workspace packages. A future package could expose:
 
 ```bash
-npx -y @dukeabaddon/telic doctor
-npx -y @dukeabaddon/telic mcp
+npx -y telic doctor
+npx -y telic mcp
 ```
 
 Publication requires a chosen available package name, npm account or

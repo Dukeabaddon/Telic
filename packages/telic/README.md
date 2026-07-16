@@ -12,13 +12,13 @@ validates workflow artifacts, permissions, evidence references, and run state.
 Run without a global install:
 
 ```bash
-npx @dukeabaddon/telic doctor --json
+npx telic doctor --json
 ```
 
 Or install globally:
 
 ```bash
-npm install -g @dukeabaddon/telic
+npm install -g telic
 telic doctor --json
 ```
 
@@ -30,7 +30,7 @@ module.
 For STDIO MCP clients:
 
 ```bash
-TELIC_REPOSITORY_ROOT=/absolute/path/to/project npx @dukeabaddon/telic mcp
+TELIC_REPOSITORY_ROOT=/absolute/path/to/project npx telic mcp
 ```
 
 Example MCP configuration:
@@ -40,7 +40,7 @@ Example MCP configuration:
   "mcpServers": {
     "telic": {
       "command": "npx",
-      "args": ["-y", "@dukeabaddon/telic", "mcp"],
+      "args": ["-y", "telic", "mcp"],
       "env": {
         "TELIC_REPOSITORY_ROOT": "/absolute/path/to/project"
       }

@@ -1,5 +1,5 @@
 {
-  "name": "@dukeabaddon/telic",
+  "name": "telic",
   "version": "0.1.0",
   "description": "A local MCP control plane for permission-bounded, evidence-backed agentic coding workflows.",
   "type": "module",

@@ -30,7 +30,7 @@
     "adapters:validate": "node scripts/validate-adapters.mjs",
     "adapters:validate:native": "node scripts/validate-adapters.mjs --native",
     "adapters:test": "vitest run test/adapter-packs.test.ts",
-    "pack:check": "npm run build && npm pack --workspace @dukeabaddon/telic --dry-run",
+    "pack:check": "npm run build && npm pack --workspace telic --dry-run",
     "check": "npm run format:check && npm run build && npm run test:coverage && npm run codex-assets:validate && npm run marketplace:validate && npm run adapters:validate",
     "check:official": "npm run check && npm run codex:validate:official"
   },

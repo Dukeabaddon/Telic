@@ -67,6 +67,8 @@ describe("MCP transport", () => {
         "telic_get_next_action",
         "telic_get_run",
         "telic_get_trace",
+        "telic_list_runs",
+        "telic_cancel_run",
         "telic_ground_context",
         "telic_start_run",
         "telic_submit_artifact",
@@ -75,6 +77,10 @@ describe("MCP transport", () => {
     expect(
       listed.tools.find((tool) => tool.name === "telic_ground_context")
         ?.annotations?.readOnlyHint,
+    ).toBe(false);
+    expect(
+      listed.tools.find((tool) => tool.name === "telic_cancel_run")?.annotations
+        ?.idempotentHint,
     ).toBe(false);
     expect(
       listed.tools.find((tool) => tool.name === "telic_start_run")?.inputSchema
@@ -116,6 +122,9 @@ describe("MCP transport", () => {
     expect(promptContent.text).toContain(
       "Never mutate in report_only, plan_only, or analyze_only mode.",
     );
+    expect(promptContent.text).toContain("telic_list_runs");
+    expect(promptContent.text).toContain("telic_cancel_run");
+    expect(promptContent.text).toContain("body_json");
 
     const started = await client.callTool({
       name: "telic_start_run",
@@ -144,7 +153,8 @@ describe("MCP transport", () => {
     });
     expect(networkStarted.isError).not.toBe(true);
     const networkStartBody = networkStarted.structuredContent as {
-      run: { runId: string };
+      run: { runId: string; version: number };
+      nextAction: { id: string };
     };
     expect(
       service.getArtifact(
@@ -155,6 +165,37 @@ describe("MCP transport", () => {
       authorization: {
         granted: { network: { readDomains: ["api.example.com"] } },
       },
+    });
+
+    const listedRuns = await client.callTool({
+      name: "telic_list_runs",
+      arguments: { limit: 20 },
+    });
+    expect(listedRuns.isError).not.toBe(true);
+    expect(listedRuns.structuredContent).toMatchObject({
+      ok: true,
+      runs: expect.arrayContaining([
+        expect.objectContaining({
+          runId: networkStartBody.run.runId,
+          status: "running",
+        }),
+      ]),
+    });
+    expect(JSON.stringify(listedRuns.structuredContent)).not.toContain(root);
+
+    const cancelled = await client.callTool({
+      name: "telic_cancel_run",
+      arguments: {
+        run_id: networkStartBody.run.runId,
+        action_id: networkStartBody.nextAction.id,
+        expected_run_version: networkStartBody.run.version,
+      },
+    });
+    expect(cancelled.isError).not.toBe(true);
+    expect(cancelled.structuredContent).toMatchObject({
+      ok: true,
+      run: { status: "cancelled", version: networkStartBody.run.version + 1 },
+      nextAction: { kind: "terminal", status: "cancelled" },
     });
 
     const stale = await client.callTool({
@@ -197,6 +238,77 @@ describe("MCP transport", () => {
       run: { version: number };
       nextAction: { id: string };
     };
+
+    const strictPermissionsBody = {
+      schemaVersion: "1.0",
+      id: "contract-empty-permissions",
+      runId: startBody.run.runId,
+      permissions: {
+        repository: { read: ["**"], write: [], delete: [] },
+        shell: { inspect: false, executeAllowlist: [] },
+        runtime: { inspect: [], restart: [] },
+        browser: { inspect: false, mutateState: false },
+        network: { readDomains: [], externalWrite: false },
+        subagents: { spawn: false, maximumChildren: 0, maximumDepth: 0 },
+      },
+    };
+    const nestedEmptyArraysObject = await client.callTool({
+      name: "telic_submit_artifact",
+      arguments: {
+        run_id: startBody.run.runId,
+        action_id: groundedBody.nextAction.id,
+        expected_run_version: groundedBody.run.version,
+        artifact_type: "TaskContract",
+        body: strictPermissionsBody,
+      },
+    });
+    expect(nestedEmptyArraysObject.isError).toBe(true);
+    expect(nestedEmptyArraysObject.structuredContent).toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining([
+        expect.objectContaining({ path: "originalRequestRef" }),
+      ]),
+    });
+    expect(
+      JSON.stringify(nestedEmptyArraysObject.structuredContent),
+    ).not.toContain("permissions.repository.write");
+
+    const nestedEmptyArraysJson = await client.callTool({
+      name: "telic_submit_artifact",
+      arguments: {
+        run_id: startBody.run.runId,
+        action_id: groundedBody.nextAction.id,
+        expected_run_version: groundedBody.run.version,
+        artifact_type: "TaskContract",
+        body_json: JSON.stringify(strictPermissionsBody),
+      },
+    });
+    expect(nestedEmptyArraysJson.isError).toBe(true);
+    expect(nestedEmptyArraysJson.structuredContent).toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining([
+        expect.objectContaining({ path: "originalRequestRef" }),
+      ]),
+    });
+    expect(
+      JSON.stringify(nestedEmptyArraysJson.structuredContent),
+    ).not.toContain("permissions.repository.write");
+    const conflictingBodyForms = await client.callTool({
+      name: "telic_submit_artifact",
+      arguments: {
+        run_id: startBody.run.runId,
+        action_id: groundedBody.nextAction.id,
+        expected_run_version: groundedBody.run.version,
+        artifact_type: "TaskContract",
+        body: strictPermissionsBody,
+        body_json: JSON.stringify(strictPermissionsBody),
+      },
+    });
+    expect(conflictingBodyForms.isError).toBe(true);
+    expect(conflictingBodyForms.structuredContent).toMatchObject({
+      ok: false,
+      error: expect.stringContaining("cannot be combined"),
+    });
 
     const malformed = await client.callTool({
       name: "telic_submit_artifact",

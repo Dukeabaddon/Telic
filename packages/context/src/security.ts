@@ -171,34 +171,26 @@ export async function validateActivePath(
   if (isAbsolute(value)) {
     const lexical = resolve(value);
     if (!isPathContained(root, lexical)) {
-      throw new ContextSecurityError(
-        "An active path escapes the resolved repository root.",
-      );
+      throw new ContextSecurityError(activePathBoundaryMessage(root, value));
     }
     normalized = relative(root, lexical).split(sep).join("/");
   } else {
     normalized = normalizeRepositoryPath(value) ?? "";
     if (normalized.length === 0) {
-      throw new ContextSecurityError(
-        "An active path is invalid or escapes the repository root.",
-      );
+      throw new ContextSecurityError(activePathBoundaryMessage(root, value));
     }
   }
 
   const lexical = resolve(root, ...normalized.split("/"));
   if (!isPathContained(root, lexical)) {
-    throw new ContextSecurityError(
-      "An active path escapes the resolved repository root.",
-    );
+    throw new ContextSecurityError(activePathBoundaryMessage(root, value));
   }
 
   try {
     await access(lexical, constants.F_OK);
     const resolvedPath = await realpath(lexical);
     if (!isPathContained(root, resolvedPath)) {
-      throw new ContextSecurityError(
-        "An active path resolves outside the repository root.",
-      );
+      throw new ContextSecurityError(activePathBoundaryMessage(root, value));
     }
   } catch (error) {
     if (error instanceof ContextSecurityError) {
@@ -207,6 +199,10 @@ export async function validateActivePath(
     // A not-yet-created active file is still a useful lexical hint.
   }
   return normalized;
+}
+
+function activePathBoundaryMessage(root: string, value: string): string {
+  return `Active path ${JSON.stringify(value)} is outside Telic's repository root ${JSON.stringify(root)}. Remove it from active_paths or start a run with TELIC_REPOSITORY_ROOT set to the containing project.`;
 }
 
 export function makeRepoRef(repositoryPath: string): `repo://${string}` {

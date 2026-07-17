@@ -1,7 +1,7 @@
 # Codex public-preview demo
 
 This guide demonstrates the public Codex Git plugin. It also explains how the
-local MCP process fits the six experimental host packs. Source development is
+local MCP process fits the seven experimental host packs. Source development is
 an alternate path; Telic is not a certified Antigravity integration.
 
 ## What the demo proves
@@ -169,18 +169,18 @@ reuse another extension's agent.
 
 ## Native host adapters
 
-Claude Code, Cursor, Antigravity, Kiro, Roo Code, and Cline each own their skill,
+Claude Code, Cursor, Antigravity, Kiro IDE, Kiro CLI, Roo Code, and Cline each own their skill,
 rule, command, permission, and MCP configuration surfaces. An extension inside
 an editor is still its own host boundary. One extension cannot assume access to
 another extension's registered MCP tools or conversation.
 
 The portable human request is `Telic: <your request>`. Host-native fallback
 syntax differs: Codex uses `/skills` or `$telic:telic`, Claude Code uses
-`/telic:telic`, Antigravity CLI, Cursor, Cline, and Roo use `/telic`, and Kiro
-uses `/agent swap telic` followed by `/telic`. These packs remain previews until
-install, discovery, sample run, permission, upgrade, and uninstall behavior is
-tested on the named host. Read [adapter status](ADAPTERS.md) before repeating a
-compatibility claim.
+`/telic:telic`, Antigravity CLI, Cursor, Cline, and Roo use `/telic`, Kiro IDE
+uses the **Telic** agent selector, and Kiro CLI uses `/agent swap telic` followed
+by `/telic`. These packs remain previews until install, discovery, sample run,
+permission, upgrade, and uninstall behavior is tested on the named host. Read
+[adapter status](ADAPTERS.md) before repeating a compatibility claim.
 
 When two coding agents share a repository, run them serially or give each a
 separate Git worktree. Concurrent mutation in one worktree can corrupt evidence

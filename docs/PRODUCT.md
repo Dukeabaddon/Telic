@@ -10,7 +10,10 @@ Telic runs inside the developer's existing coding environment. The host model au
 
 > From rough request to grounded contract to verified result, with every handoff inspectable.
 
-The repository currently proves the deterministic control-plane slice, a source-built Codex reference integration, and six experimental host packs. It does not yet prove a polished end-user run across every mode or host. See [STATUS.md](STATUS.md).
+The repository currently proves the deterministic control-plane slice, a
+source-built Codex reference integration, and seven experimental host packs. It
+does not yet prove a polished end-user run across every mode or host. See
+[STATUS.md](STATUS.md).
 
 ## Problem
 
@@ -101,18 +104,18 @@ The host obtains each `NextAction`, performs the logical reasoning turn, and sub
 ## Current product surface
 
 - local protocol/controller/context/ledger packages;
-- seven-tool STDIO MCP server plus the portable `telic_workflow` prompt;
+- nine-tool STDIO MCP server plus the portable `telic_workflow` prompt;
 - source-built diagnostics and trace CLI;
 - Codex plugin and skill as the reference host driver;
-- six experimental source packs for Claude Code, Antigravity, Cursor, Kiro, Cline, and Roo Code;
+- seven experimental source packs for Claude Code, Antigravity, Cursor, Kiro IDE, Kiro CLI, Cline, and Roo Code;
 - all five intent modes in the protocol, with conservative limits documented in [STATUS.md](STATUS.md);
 - content-addressed exact artifacts and bounded context manifests;
 - terminal trace output and artifact retrieval.
 
 Current source does **not** include browser/DevTools integration, a visual
-inspector, host-wide tool interception, a certified non-Codex lifecycle, a
-public package, or a hosted service. Six non-Codex source adapter packs are
-experimental integration artifacts, not supported-release claims.
+inspector, host-wide tool interception, a certified non-Codex lifecycle, or a
+hosted service. Seven non-Codex source adapter packs are experimental integration
+artifacts, not supported-release claims.
 
 ## Context efficiency
 

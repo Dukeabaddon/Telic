@@ -1,4 +1,10 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -97,26 +103,33 @@ function bindTemplate(
   return value;
 }
 
-async function createHarness(mode: IntentMode): Promise<Harness> {
-  const repositoryRoot = mkdtempSync(join(tmpdir(), "telic-full-flow-repo-"));
-  mkdirSync(join(repositoryRoot, "apps/web/src"), { recursive: true });
-  mkdirSync(join(repositoryRoot, "apps/api"), { recursive: true });
-  mkdirSync(join(repositoryRoot, "src"), { recursive: true });
-  mkdirSync(join(repositoryRoot, "infra"), { recursive: true });
-  writeFileSync(
-    join(repositoryRoot, "AGENTS.md"),
-    "# Rules\nPreserve intent, authorization, evidence, and tests.\n",
-  );
-  writeFileSync(
-    join(repositoryRoot, "apps/web/src/api.ts"),
-    "export const projectsEndpoint = '/api/projects';\n",
-  );
-  writeFileSync(
-    join(repositoryRoot, "apps/api/cors.ts"),
-    "export const allowedOrigins = ['http://localhost:5173'];\n",
-  );
-  writeFileSync(join(repositoryRoot, "src/existing.ts"), "export {};\n");
-  writeFileSync(join(repositoryRoot, "infra/prod.yml"), "production: true\n");
+async function createHarness(
+  mode: IntentMode,
+  options: { repositoryRoot?: string; activePaths?: string[] } = {},
+): Promise<Harness> {
+  const repositoryRoot =
+    options.repositoryRoot ??
+    mkdtempSync(join(tmpdir(), "telic-full-flow-repo-"));
+  if (!options.repositoryRoot) {
+    mkdirSync(join(repositoryRoot, "apps/web/src"), { recursive: true });
+    mkdirSync(join(repositoryRoot, "apps/api"), { recursive: true });
+    mkdirSync(join(repositoryRoot, "src"), { recursive: true });
+    mkdirSync(join(repositoryRoot, "infra"), { recursive: true });
+    writeFileSync(
+      join(repositoryRoot, "AGENTS.md"),
+      "# Rules\nPreserve intent, authorization, evidence, and tests.\n",
+    );
+    writeFileSync(
+      join(repositoryRoot, "apps/web/src/api.ts"),
+      "export const projectsEndpoint = '/api/projects';\n",
+    );
+    writeFileSync(
+      join(repositoryRoot, "apps/api/cors.ts"),
+      "export const allowedOrigins = ['http://localhost:5173'];\n",
+    );
+    writeFileSync(join(repositoryRoot, "src/existing.ts"), "export {};\n");
+    writeFileSync(join(repositoryRoot, "infra/prod.yml"), "production: true\n");
+  }
 
   const service = new TelicService({
     repositoryRoot,
@@ -137,7 +150,11 @@ async function createHarness(mode: IntentMode): Promise<Harness> {
   });
   const grounded = await service.groundContext({
     runId: started.run.runId,
-    activePaths: ["AGENTS.md", "apps/web/src/api.ts", "apps/api/cors.ts"],
+    activePaths: options.activePaths ?? [
+      "AGENTS.md",
+      "apps/web/src/api.ts",
+      "apps/api/cors.ts",
+    ],
   });
   const records = service.getRun(started.run.runId).artifacts;
   const request = records.find((artifact) => artifact.type === "UserMessage");
@@ -149,7 +166,9 @@ async function createHarness(mode: IntentMode): Promise<Harness> {
   }
   const repositoryRef = selectedRefs.has("repo://apps/web/src/api.ts")
     ? "repo://apps/web/src/api.ts"
-    : [...selectedRefs].find((ref) => ref.startsWith("repo://"));
+    : [...selectedRefs].find(
+        (ref) => ref.startsWith("repo://") && ref !== "repo://AGENTS.md",
+      );
   if (mode !== "report_only" && !repositoryRef) {
     throw new Error("grounded repository reference expected");
   }
@@ -767,8 +786,11 @@ async function completeSimpleMode(
   return { harness, terminal, executes };
 }
 
-async function advanceAnalyzeRunToAudit(failedVerification = false) {
-  const harness = await createHarness("analyze_only");
+async function advanceAnalyzeRunToAudit(
+  failedVerification = false,
+  options: { repositoryRoot?: string; activePaths?: string[] } = {},
+) {
+  const harness = await createHarness("analyze_only", options);
   acceptIntent(harness, "analyze_only");
   harness.submit(
     "WorkPlan",
@@ -821,6 +843,72 @@ describe("TelicService full-flow conformance", () => {
       );
     },
   );
+
+  it("drives the recommendation-bias fixture to an honest browser-unavailable report", async () => {
+    const fixtureSource = join(
+      process.cwd(),
+      "test/fixtures/demo/recommendation-bias",
+    );
+    const repositoryRoot = mkdtempSync(
+      join(tmpdir(), "telic-recommendation-bias-"),
+    );
+    cpSync(fixtureSource, repositoryRoot, { recursive: true });
+    const rankingPath = join(repositoryRoot, "src/ranking.ts");
+    const before = readFileSync(rankingPath, "utf8");
+    const harness = await advanceAnalyzeRunToAudit(true, {
+      repositoryRoot,
+      activePaths: ["AGENTS.md", "src/ranking.ts"],
+    });
+    const audit = makeReleaseAudit(harness, {
+      resultIds: ["result-01"],
+      evidenceRef: `artifact://${harness.runId}/evidence-01`,
+      decision: "partial",
+    });
+    audit.userFidelity[0].status = "unverified";
+    audit.claimEvidenceMatrix = [
+      {
+        claimId: "browser-verification-01",
+        claim: "Browser or runtime evidence confirmed the data-bias cause.",
+        criterionIds: ["AC-1"],
+        basis: "direct",
+        status: "unverified",
+        evidenceRefs: [],
+        rationaleSummary:
+          "The deterministic fixture has repository evidence only; browser and runtime evidence were unavailable.",
+      },
+    ];
+    audit.unresolvedRisks = [
+      "Input-data bias remains unverified because browser and runtime evidence were unavailable.",
+    ];
+    harness.submit("ReleaseAudit", "release_auditor", audit);
+    const report = makeUserReport(harness, "failed_verification");
+    report.unresolvedRisks = [...audit.unresolvedRisks];
+    const terminal = harness.submit("UserReport", "release_auditor", report);
+
+    expect(terminal.nextAction).toMatchObject({
+      kind: "terminal",
+      status: "failed_verification",
+    });
+    expect(
+      harness.service
+        .getRun(harness.runId)
+        .artifacts.map((artifact) => artifact.type),
+    ).toEqual(
+      expect.arrayContaining([
+        "ProblemFrame",
+        "TaskContract",
+        "PromptReview",
+        "WorkPlan",
+        "Evidence",
+        "WorkResult",
+        "QualityReview",
+        "ReleaseAudit",
+        "UserReport",
+      ]),
+    );
+    expect(harness.repositoryRef).toBe("repo://src/ranking.ts");
+    expect(readFileSync(rankingPath, "utf8")).toBe(before);
+  });
 
   it("drives analyze_and_fix through a supported diagnosis gate and bounded fix", async () => {
     const harness = await createHarness("analyze_and_fix");

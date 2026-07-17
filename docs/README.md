@@ -35,7 +35,7 @@ For an adapter or core contributor:
 | [`PROTOCOL.md`](PROTOCOL.md)         | What enters and leaves each logical phase?                    | Conceptual; schemas are authoritative       |
 | [`QUALITY.md`](QUALITY.md)           | What evidence is sufficient, and how are loops bounded?       | Normative design with partial enforcement   |
 | [`EXAMPLE_RUN.md`](EXAMPLE_RUN.md)   | What should a complete diagnosis look like?                   | Illustrative, not a recorded run            |
-| [`ADAPTERS.md`](ADAPTERS.md)         | What is shared, and what changes by coding host?              | Codex reference; six experimental packs     |
+| [`ADAPTERS.md`](ADAPTERS.md)         | What is shared, and what changes by coding host?              | Codex reference; seven experimental packs   |
 | [`INSTALLATION.md`](INSTALLATION.md) | How can a developer build and load the preview?               | Current source flow; release flow planned   |
 | [`DEMO.md`](DEMO.md)                 | How can a developer demonstrate the source preview safely?    | Codex current; Antigravity path exploratory |
 | [`THIRD_PARTY.md`](THIRD_PARTY.md)   | What is installed, optional, or merely inspirational?         | Current inventory                           |

@@ -1,6 +1,6 @@
 # Telic architecture
 
-**Status:** Executable local control plane with a Codex reference integration and six source-preview host packs.
+**Status:** Executable local control plane with a Codex reference integration and seven source-preview host packs.
 
 ## Objective
 
@@ -51,7 +51,10 @@ Tree-sitter, LSP symbols, code graphs, and lossy compression are not implemented
 
 ### `@telic/mcp`
 
-Exposes seven tools over local STDIO: start, ground, next action, submit artifact/clarification, inspect run, retrieve artifact, and inspect trace. It also exposes the host-neutral `telic_workflow` prompt. It composes protocol/core/context behavior and writes protocol JSON only to stdout.
+Exposes nine tools over local STDIO: start, ground, next action, submit
+artifact/clarification, cancel, list runs, inspect run, retrieve artifact, and
+inspect trace. It also exposes the host-neutral `telic_workflow` prompt. It
+composes protocol/core/context behavior and writes protocol JSON only to stdout.
 
 MCP is not a prompt interceptor, model service, native-agent API, or universal host-policy hook. It can fail a Telic artifact submission; it cannot prevent a direct host-native shell/editor/browser action that bypasses its tools.
 
@@ -65,7 +68,13 @@ Packages the Codex reference integration: plugin metadata, the `telic:telic` ski
 
 ### `adapters/`
 
-Contains source-preview packs for Claude Code, Antigravity, Cursor, Kiro, Cline, and Roo Code. Their host-specific manifests or project configuration point to the same generated standalone server and canonical skill. Repository checks validate their files and complete local STDIO handshakes. Those checks prove package shape and protocol compatibility, not every host's installation lifecycle or marketplace approval.
+Contains source-preview packs for Claude Code, Antigravity, Cursor, Kiro IDE,
+Kiro CLI, Cline, and Roo Code. Their host-specific manifests or project
+configuration point to the same generated standalone server and canonical skill.
+Repository checks validate their files and complete local STDIO handshakes. The
+Kiro IDE launcher also proves overlay-root binding against an unrelated working
+directory. These checks prove package shape and protocol compatibility, not each
+host's installation lifecycle or marketplace approval.
 
 ## Host-driven loop
 

@@ -14,7 +14,7 @@ The AI development environment the user is already running, such as Codex, Claud
 
 ### Host adapter
 
-A thin host-specific layer that activates Telic and maps the host's rules, skills, tools, subagents, and permission surfaces to the portable Telic protocol. Telic ships a source-built Codex reference plugin and six experimental host packs.
+A thin host-specific layer that activates Telic and maps the host's rules, skills, tools, subagents, and permission surfaces to the portable Telic protocol. Telic ships a source-built Codex reference plugin and seven experimental host packs.
 
 ### Skill
 
@@ -34,7 +34,7 @@ Model Context Protocol, a standard connection between an AI host and tools or co
 
 ### MCP server
 
-A local or remote process exposing MCP tools, resources, and prompts. The Telic source preview ships a local STDIO process exposing seven controller, context, trace, and artifact operations plus the `telic_workflow` prompt. It contains deterministic runtime behavior and does not call a model API.
+A local or remote process exposing MCP tools, resources, and prompts. The Telic source preview ships a local STDIO process exposing nine controller, context, trace, recovery, and artifact operations plus the `telic_workflow` prompt. It contains deterministic runtime behavior and does not call a model API.
 
 ### MCP tool
 

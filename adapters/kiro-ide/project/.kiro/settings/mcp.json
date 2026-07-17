@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "telic": {
+      "command": "node",
+      "args": ["./.kiro/telic/launch.mjs"],
+      "autoApprove": []
+    }
+  }
+}

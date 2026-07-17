@@ -2,6 +2,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -24,6 +25,7 @@ const skillTargets = [
   "adapters/antigravity/telic/skills/telic",
   "adapters/cursor/project/.cursor/skills/telic",
   "adapters/kiro/project/.kiro/skills/telic",
+  "adapters/kiro-ide/project/.kiro/skills/telic",
   "adapters/cline/project/.cline/skills/telic",
   "adapters/roo-code/project/.roo/skills/telic",
 ];
@@ -33,6 +35,8 @@ const expectedTools = [
   "telic_get_next_action",
   "telic_get_run",
   "telic_get_trace",
+  "telic_list_runs",
+  "telic_cancel_run",
   "telic_ground_context",
   "telic_start_run",
   "telic_submit_artifact",
@@ -95,6 +99,11 @@ const launchConfigurations: readonly LaunchConfiguration[] = [
     cwd: join(root, "adapters/kiro/project"),
     ...parse("adapters/kiro/project/.kiro/agents/telic.json").mcpServers.telic,
   },
+  launch(
+    "Kiro IDE",
+    "adapters/kiro-ide/project",
+    "adapters/kiro-ide/project/.kiro/settings/mcp.json",
+  ),
   launch(
     "Cline",
     "adapters/cline/project",
@@ -167,8 +176,11 @@ describe("source-preview host adapters", () => {
     ];
     const kiro = parse("adapters/kiro/project/.kiro/agents/telic.json");
     configurations.push({ mcpServers: kiro.mcpServers });
+    configurations.push(
+      parse("adapters/kiro-ide/project/.kiro/settings/mcp.json"),
+    );
 
-    for (const configuration of configurations) {
+    for (const configuration of configurations.slice(0, -1)) {
       const server = configuration.mcpServers.telic;
       expect(server.command).toBe("node");
       expect(server.args).toHaveLength(1);
@@ -178,11 +190,74 @@ describe("source-preview host adapters", () => {
       );
     }
 
+    const kiroIde = configurations.at(-1)!.mcpServers.telic;
+    expect(kiroIde.command).toBe("node");
+    expect(kiroIde.args).toEqual(["./.kiro/telic/launch.mjs"]);
+    expect(kiroIde.autoApprove).toEqual([]);
+
     expect(kiro.allowedTools).toEqual([]);
     expect(
       parse("adapters/roo-code/project/.roo/mcp.json").mcpServers.telic
         .alwaysAllow,
     ).toEqual([]);
+  });
+
+  it("ships a bounded Kiro IDE workflow driver without auto-approval", () => {
+    const agent = read("adapters/kiro-ide/project/.kiro/agents/telic.md");
+    expect(agent).toMatch(/^---\nname: telic\n/u);
+    expect(agent).toContain('tools: [read, write, shell, "@telic"]');
+    expect(agent).not.toContain("permissions:");
+    expect(agent).toContain("telic_start_run");
+    expect(agent).toContain("telic_get_next_action");
+    expect(agent).toContain("telic_submit_artifact");
+    expect(agent).toContain("telic_list_runs");
+    expect(agent).toContain("telic_cancel_run");
+    expect(agent).toContain("body_json");
+    expect(agent).toContain("repositoryRoot");
+    expect(read("adapters/kiro-ide/project/.kiro/telic/launch.mjs")).toContain(
+      'process.env.TELIC_REPOSITORY_ROOT = resolve(overlayDirectory, "../..")',
+    );
+  });
+
+  it("binds the Kiro IDE server to the overlay project instead of process cwd", async () => {
+    const cwd = join(root, "adapters/kiro-ide/project");
+    const unrelatedRepository = mkdtempSync(
+      join(tmpdir(), "telic-kiro-unrelated-root-"),
+    );
+    const stateDirectory = mkdtempSync(join(tmpdir(), "telic-kiro-state-"));
+    const transport = new StdioClientTransport({
+      command: "node",
+      args: ["./.kiro/telic/launch.mjs"],
+      cwd,
+      stderr: "pipe",
+      env: {
+        ...getDefaultEnvironment(),
+        TELIC_REPOSITORY_ROOT: unrelatedRepository,
+        TELIC_STATE_DIR: stateDirectory,
+      },
+    });
+    const client = new Client({ name: "telic-kiro-root-test", version: "1.0" });
+
+    try {
+      await client.connect(transport);
+      const started = await client.callTool({
+        name: "telic_start_run",
+        arguments: {
+          original_request: "Inspect this source-preview project.",
+          mode: "plan_only",
+          host_capabilities: ["repository.read"],
+          authorization_granted: ["repository.read"],
+        },
+      });
+      expect(started.isError).not.toBe(true);
+      expect(started.structuredContent).toMatchObject({
+        run: { repositoryRoot: realpathSync(cwd) },
+      });
+    } finally {
+      await client.close().catch(() => undefined);
+      rmSync(unrelatedRepository, { force: true, recursive: true });
+      rmSync(stateDirectory, { force: true, recursive: true });
+    }
   });
 
   it.each(launchConfigurations)(
@@ -219,7 +294,7 @@ describe("source-preview host adapters", () => {
 
         const tools = await client.listTools();
         expect(tools.tools.map((tool) => tool.name).sort()).toEqual(
-          expectedTools,
+          [...expectedTools].sort(),
         );
       } finally {
         await client.close().catch(() => undefined);

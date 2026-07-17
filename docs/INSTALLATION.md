@@ -182,7 +182,7 @@ npm run adapters:validate:native
 ```
 
 The Claude Code and Antigravity directories are plugin-shaped source previews.
-Cursor, Kiro, Cline, and Roo are project overlays that must be merged into the
+Cursor, Kiro IDE, Kiro CLI, Cline, and Roo are project overlays that must be merged into the
 target repository rather than copied over existing configuration blindly. See
 [`adapters/README.md`](../adapters/README.md) for exact paths, activation names,
 and host-specific cautions. A successful local MCP handshake does not certify
@@ -197,7 +197,7 @@ Codex resolves an explicit Telic request or selection
 Codex launches plugin-provided Telic STDIO process
         |
         v
-Host model calls seven deterministic Telic tools
+Host model calls nine deterministic Telic tools
         |
         v
 Artifacts and trace persist in local XDG state
@@ -255,7 +255,7 @@ ledger views; there is no visual inspector yet.
 | Host/platform                                          | Current claim       | Notes                                                                                         |
 | ------------------------------------------------------ | ------------------- | --------------------------------------------------------------------------------------------- |
 | Codex plugin from a Linux source checkout              | Development preview | Plugin, skill, local marketplace, and bundled STDIO MCP are present                           |
-| Six non-Codex source packs                             | Experimental        | Config, generated bundle, skill sync, and STDIO handshake tested; lifecycle untested          |
+| Seven non-Codex source packs                           | Experimental        | Config, generated bundle, skill sync, and STDIO handshake tested; lifecycle untested          |
 | Antigravity CLI and Kiro CLI schemas                   | Locally validated   | `agy 1.1.1` and `kiro-cli 2.12.1`; installed host lifecycle remains untested                  |
 | Codex CLI/IDE/desktop as separately certified surfaces | Not certified       | Requires clean install, lifecycle, and interaction evidence per surface                       |
 | macOS                                                  | CI candidate        | CI is configured; require a passing clean run before claiming compatibility                   |

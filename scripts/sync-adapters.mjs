@@ -22,6 +22,7 @@ const skillTargets = [
   "adapters/antigravity/telic/skills/telic",
   "adapters/cursor/project/.cursor/skills/telic",
   "adapters/kiro/project/.kiro/skills/telic",
+  "adapters/kiro-ide/project/.kiro/skills/telic",
   "adapters/cline/project/.cline/skills/telic",
   "adapters/roo-code/project/.roo/skills/telic",
 ];
@@ -31,6 +32,7 @@ const bundleTargets = [
   "adapters/antigravity/telic/dist/mcp/server.js",
   "adapters/cursor/project/.cursor/telic/dist/mcp/server.js",
   "adapters/kiro/project/.kiro/telic/dist/mcp/server.js",
+  "adapters/kiro-ide/project/.kiro/telic/dist/mcp/server.js",
   "adapters/cline/project/.cline/telic/dist/mcp/server.js",
   "adapters/roo-code/project/.roo/telic/dist/mcp/server.js",
 ];

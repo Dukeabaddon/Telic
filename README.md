@@ -140,10 +140,11 @@ prompt. Your host still needs a skill, command, or equivalent workflow driver.
 </details>
 
 <details>
-<summary><strong>Claude Code, Cursor, Antigravity, Kiro, Cline, and Roo Code</strong></summary>
+<summary><strong>Claude Code, Cursor, Antigravity, Kiro IDE/CLI, Cline, and Roo Code</strong></summary>
 
-Telic includes preview source adapters for these hosts. Each host stores skills,
-commands, and MCP configuration differently, so setup is host-specific.
+Telic includes preview source adapters for these hosts. Kiro IDE and Kiro CLI
+use separate packs. Each host stores skills, commands, and MCP configuration
+differently, so setup is host-specific.
 
 See [adapter setup](docs/ADAPTERS.md) for the correct files and activation
 syntax. Do not copy an adapter over existing configuration without reviewing

@@ -16,6 +16,7 @@ const paths = {
   antigravity: "adapters/antigravity/telic",
   cursor: "adapters/cursor/project/.cursor",
   kiro: "adapters/kiro/project/.kiro",
+  kiroIde: "adapters/kiro-ide/project/.kiro",
   cline: "adapters/cline/project/.cline",
   roo: "adapters/roo-code/project/.roo",
 };
@@ -25,6 +26,7 @@ const skillTargets = [
   `${paths.antigravity}/skills/telic`,
   `${paths.cursor}/skills/telic`,
   `${paths.kiro}/skills/telic`,
+  `${paths.kiroIde}/skills/telic`,
   `${paths.cline}/skills/telic`,
   `${paths.roo}/skills/telic`,
 ];
@@ -34,6 +36,7 @@ const bundleTargets = [
   `${paths.antigravity}/dist/mcp/server.js`,
   `${paths.cursor}/telic/dist/mcp/server.js`,
   `${paths.kiro}/telic/dist/mcp/server.js`,
+  `${paths.kiroIde}/telic/dist/mcp/server.js`,
   `${paths.cline}/telic/dist/mcp/server.js`,
   `${paths.roo}/telic/dist/mcp/server.js`,
 ];
@@ -158,6 +161,54 @@ expectEqual(
   "Kiro MCP path",
 );
 
+const kiroIdeConfiguration = json(`${paths.kiroIde}/settings/mcp.json`);
+const kiroIdeServer = kiroIdeConfiguration?.mcpServers?.telic;
+if (!kiroIdeServer || kiroIdeServer.command !== "node") {
+  fail("Kiro IDE MCP config must define the local telic Node.js launcher");
+}
+expectEqual(
+  kiroIdeServer.args,
+  ["./.kiro/telic/launch.mjs"],
+  "Kiro IDE MCP launcher path",
+);
+if (
+  !Array.isArray(kiroIdeServer.autoApprove) ||
+  kiroIdeServer.autoApprove.length !== 0
+) {
+  fail("Kiro IDE adapter must not auto-approve Telic tools");
+}
+const kiroIdeAgent = text(`${paths.kiroIde}/agents/telic.md`);
+if (!kiroIdeAgent.startsWith("---\nname: telic\n")) {
+  fail("Kiro IDE agent must expose the telic identity");
+}
+if (!kiroIdeAgent.includes('tools: [read, write, shell, "@telic"]')) {
+  fail("Kiro IDE agent must limit itself to local host tools and Telic MCP");
+}
+if (/^permissions:/m.test(kiroIdeAgent)) {
+  fail("Kiro IDE adapter must not auto-approve host permissions");
+}
+for (const instruction of [
+  "telic_start_run",
+  "telic_get_next_action",
+  "telic_submit_artifact",
+  "telic_list_runs",
+  "telic_cancel_run",
+  "body_json",
+  "repositoryRoot",
+]) {
+  if (!kiroIdeAgent.includes(instruction)) {
+    fail(`Kiro IDE agent is missing ${instruction} guidance`);
+  }
+}
+if (
+  !existsSync(absolute(`${paths.kiroIde}/telic/launch.mjs`)) ||
+  !text(`${paths.kiroIde}/telic/launch.mjs`).includes(
+    'process.env.TELIC_REPOSITORY_ROOT = resolve(overlayDirectory, "../..")',
+  )
+) {
+  fail("Kiro IDE launcher must bind Telic to the overlay project root");
+}
+
 expectEqual(
   server(`${paths.cline}/mcp.json`).args,
   ["./.cline/telic/dist/mcp/server.js"],
@@ -184,6 +235,8 @@ const serializedAdapters = [
     `${paths.antigravity}/mcp_config.json`,
     `${paths.cursor}/mcp.json`,
     `${paths.kiro}/agents/telic.json`,
+    `${paths.kiroIde}/settings/mcp.json`,
+    `${paths.kiroIde}/agents/telic.md`,
     `${paths.cline}/mcp.json`,
     `${paths.roo}/mcp.json`,
   ].map((path) => text(path)),

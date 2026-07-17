@@ -69,6 +69,20 @@ export interface GroundContextRequest {
   budget?: GroundingBudgetInput;
 }
 
+export type RunSummary = Pick<
+  RunRecord,
+  | "runId"
+  | "schemaVersion"
+  | "requestedMode"
+  | "status"
+  | "phase"
+  | "resumePhase"
+  | "version"
+  | "outcomeHint"
+  | "createdAt"
+  | "updatedAt"
+>;
+
 function protocolValidator(type: string, body: unknown): unknown {
   if (!isArtifactType(type))
     throw new Error(`Unsupported artifact type: ${type}`);
@@ -692,9 +706,52 @@ export class TelicService {
     return this.controller.answerClarification(runId, response);
   }
 
+  cancelRun(runId: string, actionId: string, expectedRunVersion: number) {
+    this.assertActionToken(runId, actionId, expectedRunVersion);
+    const run = this.controller.cancelRun(runId);
+    return { run, nextAction: this.controller.getNextAction(runId) };
+  }
+
+  listRuns(limit = 20): RunSummary[] {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+      throw new Error("Run list limit must be an integer from 1 to 100");
+    }
+    return this.ledger
+      .listRuns(limit)
+      .map(
+        ({
+          runId,
+          schemaVersion,
+          requestedMode,
+          status,
+          phase,
+          resumePhase,
+          version,
+          outcomeHint,
+          createdAt,
+          updatedAt,
+        }) => ({
+          runId,
+          schemaVersion,
+          requestedMode,
+          status,
+          phase,
+          resumePhase,
+          version,
+          outcomeHint,
+          createdAt,
+          updatedAt,
+        }),
+      );
+  }
+
   getRun(runId: string) {
     const run = this.ledger.requireRun(runId);
-    return { run, artifacts: this.ledger.listArtifacts(runId) };
+    return {
+      run,
+      artifacts: this.ledger.listArtifacts(runId),
+      nextAction: this.controller.getNextAction(runId),
+    };
   }
 
   getArtifact(runId: string, artifactId: string) {

@@ -12,9 +12,9 @@ Telic is an executable, local source preview. It is suitable for development and
 | Controller      | Deterministic phase ordering, stage-aware verification preflight, one user-facing clarification, one contract revision, one shared remediation, and terminal reports     |
 | Persistence     | SQLite metadata/events plus immutable SHA-256-addressed JSON bodies; digest verification occurs on read                                                                  |
 | Context         | Bounded inventory; token-boundary path ranking; eight-file zero-score fallback cap; relevance/file/byte budgets; path, symlink, duplicate, and heuristic secret controls |
-| MCP             | Local STDIO server with seven tools plus a host-neutral `telic_workflow` prompt                                                                                          |
+| MCP             | Local STDIO server with nine tools plus a host-neutral `telic_workflow` prompt                                                                                           |
 | CLI             | npm-packaged and source-built `doctor`, `status`, `trace`, `artifact`, and `mcp` commands                                                                                |
-| Host package    | Codex reference plugin plus six experimental source packs generated from one canonical skill and MCP bundle                                                              |
+| Host package    | Codex reference plugin plus seven experimental source packs generated from one canonical skill and MCP bundle                                                            |
 | Model access    | None in the runtime; the active host model authors semantic artifacts                                                                                                    |
 | Network service | None required; normal transport is local STDIO                                                                                                                           |
 
@@ -78,9 +78,11 @@ or deliberately unsafe tool policy.
 
 The npm package provides the portable `telic` CLI and STDIO MCP server. The
 Codex plugin is installable through this repository's public Git marketplace
-and bundles a Node.js MCP server. Six additional source packs pass repository validation and a local STDIO
-contract smoke test; Antigravity and Kiro also pass locally installed CLI schema
-validators. These source packs are not published host marketplace releases.
+and bundles a Node.js MCP server. Seven additional source packs pass repository
+validation and a local STDIO contract smoke test. The Kiro IDE pack also proves
+its overlay-root launcher in a local STDIO test; Antigravity and Kiro CLI pass
+locally installed CLI schema validators. These source packs are not published
+host marketplace releases or real-host lifecycle certifications.
 Linux x86-64 is the active development environment. Ubuntu and macOS run the
 automated CI suite. Native Windows and WSL are not in the current test matrix.
 
@@ -89,7 +91,8 @@ automated CI suite. Native Windows and WSL are not in the current test matrix.
 1. Close any remaining independent permission, cross-artifact, and multi-node audit findings.
 2. Run all repository checks from a clean checkout on the claimed platforms.
 3. Verify local marketplace install, MCP discovery, sample run, upgrade, and uninstall.
-4. Add a deterministic demo fixture with honest browser-unavailable behavior.
+4. Complete a manual Kiro IDE lifecycle run: workspace install, reconnect,
+   complete `analyze_only` fixture run, cancellation, resume, and uninstall.
 5. Complete the dependency and security review, then publish a monitored
    vulnerability-reporting channel.
 6. Publish a pinned artifact and record its checksum and repository URL.

@@ -236,7 +236,9 @@ describe("groundRepository", () => {
         request: "inspect",
         active_paths: ["../outside.ts"],
       }),
-    ).rejects.toBeInstanceOf(ContextSecurityError);
+    ).rejects.toThrow(
+      `Active path "../outside.ts" is outside Telic's repository root ${JSON.stringify(root)}`,
+    );
     await expect(
       groundRepository({
         run_id: "run-test",
@@ -244,7 +246,9 @@ describe("groundRepository", () => {
         request: "inspect",
         active_paths: ["outside-link.ts"],
       }),
-    ).rejects.toBeInstanceOf(ContextSecurityError);
+    ).rejects.toThrow(
+      "Remove it from active_paths or start a run with TELIC_REPOSITORY_ROOT set to the containing project.",
+    );
   });
 
   it("enforces file, per-file, total-byte, binary, and duplicate budgets", async () => {

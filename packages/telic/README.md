@@ -15,7 +15,7 @@ before using sensitive code.
 
 This npm package provides the portable CLI and MCP tools. It does not install
 the Telic workflow skill into Codex. For the complete Codex plugin, use the
-[Git marketplace installation](https://github.com/Dukeabaddon/Telic#try-telic-in-two-minutes).
+[Git marketplace installation](https://github.com/Dukeabaddon/Telic#install-and-use).
 
 ## Install
 
@@ -73,7 +73,7 @@ telic mcp
 
 ## Source, Docs, And Adapters
 
-The full source repository includes the Codex source plugin, six experimental
+The full source repository includes the Codex source plugin, seven experimental
 host adapter packs, protocol docs, and conformance tests:
 
 https://github.com/Dukeabaddon/Telic

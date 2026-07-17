@@ -347,6 +347,17 @@ export class SqliteLedger {
     return row ? rowToRun(row) : null;
   }
 
+  listRuns(limit: number): RunRecord[] {
+    const rows = this.database
+      .prepare(
+        `SELECT * FROM runs
+         ORDER BY updated_at DESC, run_id ASC
+         LIMIT ?`,
+      )
+      .all(limit) as RunRow[];
+    return rows.map(rowToRun);
+  }
+
   requireRun(runId: string): RunRecord {
     const run = this.getRun(runId);
     if (!run) throw new Error(`Run not found: ${runId}`);

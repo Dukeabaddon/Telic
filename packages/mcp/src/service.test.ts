@@ -128,6 +128,52 @@ describe("TelicService integration", () => {
     );
   });
 
+  it("lists redacted run summaries and returns a resumable next action", () => {
+    const active = service();
+    const started = active.startRun({
+      originalRequest: "Plan a bounded repository inspection.",
+      mode: "plan_only",
+      hostCapabilities: ["repository.read"],
+      authorizationGranted: ["repository.read"],
+    });
+
+    expect(active.listRuns()).toEqual([
+      expect.objectContaining({
+        runId: started.run.runId,
+        status: "running",
+        phase: "context_grounding",
+      }),
+    ]);
+    expect(JSON.stringify(active.listRuns())).not.toContain(
+      active.repositoryRoot,
+    );
+    expect(active.getRun(started.run.runId)).toMatchObject({
+      nextAction: {
+        id: started.nextAction.id,
+        kind: "phase",
+        phase: "context_discovery",
+      },
+    });
+
+    expect(() =>
+      active.cancelRun(
+        started.run.runId,
+        started.nextAction.id,
+        started.run.version + 1,
+      ),
+    ).toThrow(/Stale run version/);
+    expect(
+      active.cancelRun(
+        started.run.runId,
+        started.nextAction.id,
+        started.run.version,
+      ),
+    ).toMatchObject({
+      run: { status: "cancelled" },
+      nextAction: { kind: "terminal", status: "cancelled" },
+    });
+  });
+
   it("performs no new repository discovery in report-only mode", async () => {
     const active = service();
     const started = active.startRun({

@@ -31118,24 +31118,24 @@ async function validateActivePath(root, value) {
   if (isAbsolute(value)) {
     const lexical2 = resolve(value);
     if (!isPathContained(root, lexical2)) {
-      throw new ContextSecurityError("An active path escapes the resolved repository root.");
+      throw new ContextSecurityError(activePathBoundaryMessage(root, value));
     }
     normalized = relative(root, lexical2).split(sep).join("/");
   } else {
     normalized = normalizeRepositoryPath(value) ?? "";
     if (normalized.length === 0) {
-      throw new ContextSecurityError("An active path is invalid or escapes the repository root.");
+      throw new ContextSecurityError(activePathBoundaryMessage(root, value));
     }
   }
   const lexical = resolve(root, ...normalized.split("/"));
   if (!isPathContained(root, lexical)) {
-    throw new ContextSecurityError("An active path escapes the resolved repository root.");
+    throw new ContextSecurityError(activePathBoundaryMessage(root, value));
   }
   try {
     await access(lexical, constants.F_OK);
     const resolvedPath = await realpath(lexical);
     if (!isPathContained(root, resolvedPath)) {
-      throw new ContextSecurityError("An active path resolves outside the repository root.");
+      throw new ContextSecurityError(activePathBoundaryMessage(root, value));
     }
   } catch (error51) {
     if (error51 instanceof ContextSecurityError) {
@@ -31143,6 +31143,9 @@ async function validateActivePath(root, value) {
     }
   }
   return normalized;
+}
+function activePathBoundaryMessage(root, value) {
+  return `Active path ${JSON.stringify(value)} is outside Telic's repository root ${JSON.stringify(root)}. Remove it from active_paths or start a run with TELIC_REPOSITORY_ROOT set to the containing project.`;
 }
 function makeRepoRef(repositoryPath) {
   const encoded = repositoryPath.split("/").map((segment) => encodeURIComponent(segment)).join("/");
@@ -32105,6 +32108,12 @@ var SqliteLedger = class {
   getRun(runId) {
     const row = this.database.prepare("SELECT * FROM runs WHERE run_id = ?").get(runId);
     return row ? rowToRun(row) : null;
+  }
+  listRuns(limit) {
+    const rows = this.database.prepare(`SELECT * FROM runs
+         ORDER BY updated_at DESC, run_id ASC
+         LIMIT ?`).all(limit);
+    return rows.map(rowToRun);
   }
   requireRun(runId) {
     const run = this.getRun(runId);
@@ -37350,9 +37359,48 @@ var TelicService = class {
   answerClarification(runId, response) {
     return this.controller.answerClarification(runId, response);
   }
+  cancelRun(runId, actionId, expectedRunVersion) {
+    this.assertActionToken(runId, actionId, expectedRunVersion);
+    const run = this.controller.cancelRun(runId);
+    return { run, nextAction: this.controller.getNextAction(runId) };
+  }
+  listRuns(limit = 20) {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+      throw new Error("Run list limit must be an integer from 1 to 100");
+    }
+    return this.ledger.listRuns(limit).map(
+      ({
+        runId,
+        schemaVersion,
+        requestedMode,
+        status,
+        phase,
+        resumePhase,
+        version: version2,
+        outcomeHint,
+        createdAt,
+        updatedAt
+      }) => ({
+        runId,
+        schemaVersion,
+        requestedMode,
+        status,
+        phase,
+        resumePhase,
+        version: version2,
+        outcomeHint,
+        createdAt,
+        updatedAt
+      })
+    );
+  }
   getRun(runId) {
     const run = this.ledger.requireRun(runId);
-    return { run, artifacts: this.ledger.listArtifacts(runId) };
+    return {
+      run,
+      artifacts: this.ledger.listArtifacts(runId),
+      nextAction: this.controller.getNextAction(runId)
+    };
   }
   getArtifact(runId, artifactId) {
     const artifact = this.ledger.getArtifact(runId, artifactId);
@@ -37432,6 +37480,27 @@ var artifactType = external_exports.enum([
   "UserReport",
   "Evidence"
 ]);
+function parseArtifactBodyInput(body, bodyJson) {
+  if (body !== void 0 && bodyJson !== void 0) {
+    throw new Error("body and body_json cannot be combined");
+  }
+  if (body !== void 0) return body;
+  if (bodyJson === void 0) {
+    throw new Error(
+      "artifact_type and exactly one of body or body_json are required for an artifact submission"
+    );
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(bodyJson);
+  } catch {
+    throw new Error("body_json must contain valid JSON");
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("body_json must encode one canonical JSON object");
+  }
+  return parsed;
+}
 var producerByArtifactType = {
   ClarificationRequest: "controller",
   ProblemFrame: "scenario_author",
@@ -37480,6 +37549,7 @@ Workflow contract:
 5. Honor effectivePermissions independently for every host-native tool call. Telic validates submitted artifacts but cannot intercept tools used directly by the host. Never mutate in report_only, plan_only, or analyze_only mode.
 6. If the controller returns a clarification action, ask exactly that bounded question and submit the selected choice. If it returns a terminal action, retrieve the referenced UserReport and present its evidence-backed result.
 7. Expose concise decisions, scores, provenance, and rationale summaries. Never request, reveal, or store hidden chain-of-thought.
+8. Resume only after the user explicitly asks: call telic_list_runs, let the user select a run, then use telic_get_run and its current nextAction. On explicit cancellation, call telic_cancel_run with the latest action/version tokens. Submit normal canonical objects through body; if the host drops required nested empty arrays, use the mutually exclusive body_json string with the exact same JSON.
 
 The Telic server is a deterministic controller and ledger. It does not call a model. You are responsible for authoring each requested artifact from the supplied schemas and evidence.`
           }
@@ -37602,6 +37672,34 @@ function registerTools(server, service) {
     }
   );
   server.registerTool(
+    "telic_cancel_run",
+    {
+      title: "Cancel Telic run",
+      description: "Cancel the current non-terminal run with its latest action and version tokens. This records a terminal cancellation without changing the repository.",
+      inputSchema: {
+        run_id: id,
+        action_id: id,
+        expected_run_version: external_exports.number().int().min(1)
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false
+      }
+    },
+    async ({ run_id, action_id, expected_run_version }) => {
+      try {
+        return successResult({
+          ok: true,
+          ...service.cancelRun(run_id, action_id, expected_run_version)
+        });
+      } catch (error51) {
+        return errorResult(error51);
+      }
+    }
+  );
+  server.registerTool(
     "telic_submit_artifact",
     {
       title: "Submit Telic phase artifact",
@@ -37612,6 +37710,7 @@ function registerTools(server, service) {
         expected_run_version: external_exports.number().int().min(1),
         artifact_type: artifactType.optional(),
         body: external_exports.record(external_exports.string(), external_exports.unknown()).optional(),
+        body_json: external_exports.string().min(2).max(2097152).optional(),
         source_refs: external_exports.array(referenceUri).max(256).default([]),
         clarification_response: external_exports.string().min(1).max(32768).optional()
       },
@@ -37630,7 +37729,7 @@ function registerTools(server, service) {
           input.expected_run_version
         );
         if (input.clarification_response !== void 0) {
-          if (input.artifact_type !== void 0 || input.body !== void 0) {
+          if (input.artifact_type !== void 0 || input.body !== void 0 || input.body_json !== void 0) {
             throw new Error(
               "Clarification response cannot be combined with an artifact submission"
             );
@@ -37643,13 +37742,14 @@ function registerTools(server, service) {
             )
           });
         }
-        if (!input.artifact_type || !input.body) {
+        if (!input.artifact_type) {
           throw new Error(
-            "artifact_type and body are required for an artifact submission"
+            "artifact_type is required for an artifact submission"
           );
         }
-        const bodyId = input.body.id;
-        const bodyRunId = input.body.runId;
+        const body = parseArtifactBodyInput(input.body, input.body_json);
+        const bodyId = body.id;
+        const bodyRunId = body.runId;
         if (typeof bodyId !== "string" || typeof bodyRunId !== "string") {
           throw new Error(
             "Artifact body must include canonical id and runId fields"
@@ -37669,10 +37769,33 @@ function registerTools(server, service) {
             type: input.artifact_type,
             schemaVersion: "1.0",
             producer: input.artifact_type === "ClarificationRequest" ? currentAction.logicalRole : producerByArtifactType[input.artifact_type],
-            body: input.body,
+            body,
             sourceRefs: input.source_refs
           })
         });
+      } catch (error51) {
+        return errorResult(error51);
+      }
+    }
+  );
+  server.registerTool(
+    "telic_list_runs",
+    {
+      title: "List Telic runs",
+      description: "List recent run metadata for this local repository ledger. Request and artifact bodies are excluded.",
+      inputSchema: {
+        limit: external_exports.number().int().min(1).max(100).default(20)
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ limit }) => {
+      try {
+        return successResult({ ok: true, runs: service.listRuns(limit) });
       } catch (error51) {
         return errorResult(error51);
       }

@@ -69,6 +69,31 @@ const artifactType = z.enum([
   "Evidence",
 ]);
 
+function parseArtifactBodyInput(
+  body: Record<string, unknown> | undefined,
+  bodyJson: string | undefined,
+): Record<string, unknown> {
+  if (body !== undefined && bodyJson !== undefined) {
+    throw new Error("body and body_json cannot be combined");
+  }
+  if (body !== undefined) return body;
+  if (bodyJson === undefined) {
+    throw new Error(
+      "artifact_type and exactly one of body or body_json are required for an artifact submission",
+    );
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(bodyJson);
+  } catch {
+    throw new Error("body_json must contain valid JSON");
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("body_json must encode one canonical JSON object");
+  }
+  return parsed as Record<string, unknown>;
+}
+
 const producerByArtifactType: Record<z.infer<typeof artifactType>, string> = {
   ClarificationRequest: "controller",
   ProblemFrame: "scenario_author",
@@ -124,6 +149,7 @@ Workflow contract:
 5. Honor effectivePermissions independently for every host-native tool call. Telic validates submitted artifacts but cannot intercept tools used directly by the host. Never mutate in report_only, plan_only, or analyze_only mode.
 6. If the controller returns a clarification action, ask exactly that bounded question and submit the selected choice. If it returns a terminal action, retrieve the referenced UserReport and present its evidence-backed result.
 7. Expose concise decisions, scores, provenance, and rationale summaries. Never request, reveal, or store hidden chain-of-thought.
+8. Resume only after the user explicitly asks: call telic_list_runs, let the user select a run, then use telic_get_run and its current nextAction. On explicit cancellation, call telic_cancel_run with the latest action/version tokens. Submit normal canonical objects through body; if the host drops required nested empty arrays, use the mutually exclusive body_json string with the exact same JSON.
 
 The Telic server is a deterministic controller and ledger. It does not call a model. You are responsible for authoring each requested artifact from the supplied schemas and evidence.`,
           },
@@ -284,6 +310,36 @@ function registerTools(server: McpServer, service: TelicService): void {
   );
 
   server.registerTool(
+    "telic_cancel_run",
+    {
+      title: "Cancel Telic run",
+      description:
+        "Cancel the current non-terminal run with its latest action and version tokens. This records a terminal cancellation without changing the repository.",
+      inputSchema: {
+        run_id: id,
+        action_id: id,
+        expected_run_version: z.number().int().min(1),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async ({ run_id, action_id, expected_run_version }) => {
+      try {
+        return successResult({
+          ok: true,
+          ...service.cancelRun(run_id, action_id, expected_run_version),
+        });
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  server.registerTool(
     "telic_submit_artifact",
     {
       title: "Submit Telic phase artifact",
@@ -295,6 +351,7 @@ function registerTools(server: McpServer, service: TelicService): void {
         expected_run_version: z.number().int().min(1),
         artifact_type: artifactType.optional(),
         body: z.record(z.string(), z.unknown()).optional(),
+        body_json: z.string().min(2).max(2_097_152).optional(),
         source_refs: z.array(referenceUri).max(256).default([]),
         clarification_response: z.string().min(1).max(32_768).optional(),
       },
@@ -313,7 +370,11 @@ function registerTools(server: McpServer, service: TelicService): void {
           input.expected_run_version,
         );
         if (input.clarification_response !== undefined) {
-          if (input.artifact_type !== undefined || input.body !== undefined) {
+          if (
+            input.artifact_type !== undefined ||
+            input.body !== undefined ||
+            input.body_json !== undefined
+          ) {
             throw new Error(
               "Clarification response cannot be combined with an artifact submission",
             );
@@ -326,13 +387,14 @@ function registerTools(server: McpServer, service: TelicService): void {
             ),
           });
         }
-        if (!input.artifact_type || !input.body) {
+        if (!input.artifact_type) {
           throw new Error(
-            "artifact_type and body are required for an artifact submission",
+            "artifact_type is required for an artifact submission",
           );
         }
-        const bodyId = input.body.id;
-        const bodyRunId = input.body.runId;
+        const body = parseArtifactBodyInput(input.body, input.body_json);
+        const bodyId = body.id;
+        const bodyRunId = body.runId;
         if (typeof bodyId !== "string" || typeof bodyRunId !== "string") {
           throw new Error(
             "Artifact body must include canonical id and runId fields",
@@ -355,10 +417,35 @@ function registerTools(server: McpServer, service: TelicService): void {
               input.artifact_type === "ClarificationRequest"
                 ? currentAction.logicalRole
                 : producerByArtifactType[input.artifact_type],
-            body: input.body,
+            body,
             sourceRefs: input.source_refs,
           }),
         });
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "telic_list_runs",
+    {
+      title: "List Telic runs",
+      description:
+        "List recent run metadata for this local repository ledger. Request and artifact bodies are excluded.",
+      inputSchema: {
+        limit: z.number().int().min(1).max(100).default(20),
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ limit }) => {
+      try {
+        return successResult({ ok: true, runs: service.listRuns(limit) });
       } catch (error) {
         return errorResult(error);
       }

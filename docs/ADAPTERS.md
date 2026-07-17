@@ -1,6 +1,6 @@
 # Host adapters
 
-**Status:** A source-built Codex plugin and six experimental host packs are
+**Status:** A source-built Codex plugin and seven experimental host packs are
 present. Every pack passes repository validation and a local STDIO handshake.
 Antigravity and Kiro schemas also pass the locally installed host CLIs. None of
 the non-Codex packs has completed its real-host lifecycle certification.
@@ -33,7 +33,7 @@ The current portable packages own:
 - requested mode and effective permission projection;
 - repository inventory, ranking, budgets, and source provenance;
 - SQLite/content-addressed local persistence; and
-- seven STDIO MCP operations, one portable workflow prompt, and CLI inspection.
+- nine STDIO MCP operations, one portable workflow prompt, and CLI inspection.
 
 They do not own host prompt routing, model inference, native agent creation, editor UI, or host tool approvals.
 
@@ -84,7 +84,7 @@ editor/shell/browser actions do not pass through the Telic MCP server. The skill
 and artifact reviewers can constrain and audit those actions, while preventive
 enforcement remains Codex sandbox/user approval policy.
 
-See [Installation](INSTALLATION.md) for the local marketplace flow and [API](API.md) for the MCP prompt and seven tools.
+See [Installation](INSTALLATION.md) for the local marketplace flow and [API](API.md) for the MCP prompt and nine tools.
 
 ## Capability negotiation
 
@@ -100,17 +100,18 @@ the deterministic native fallback when description-based matching is unavailable
 `npm run build` copies the canonical skill and model-free MCP bundle into each
 pack. `npm run adapters:validate` checks paths, hashes, approval defaults, and
 host-specific configuration. The adapter smoke test launches every generated
-server and verifies `telic_workflow` plus the exact seven tools.
+server and verifies `telic_workflow` plus the exact nine tools.
 
-| Target          | Native fallback                    | Pack shape                 | Evidence and remaining boundary                                     |
-| --------------- | ---------------------------------- | -------------------------- | ------------------------------------------------------------------- |
-| Codex           | `$telic:telic`                     | Native source plugin       | Reference pack; full clean lifecycle remains a release gate         |
-| Claude Code     | `/telic:telic`                     | Native source plugin       | Config and transport tested; Claude lifecycle untested              |
-| Antigravity CLI | `/telic`                           | Native source plugin       | `agy 1.1.1` schema passes; installed working directory unproven     |
-| Cursor          | `/telic`                           | Project `.cursor/` overlay | Config and transport tested; IDE/CLI lifecycle untested             |
-| Kiro CLI        | `/agent swap telic`, then `/telic` | Project `.kiro/` overlay   | `kiro-cli 2.12.1` schema passes; lifecycle untested                 |
-| Cline           | `/telic`                           | Project `.cline/` overlay  | Experimental Skills must be enabled; MCP UI may still need checking |
-| Roo Code        | `/telic`                           | Legacy `.roo/` overlay     | Confirm installed version; upstream routes and layouts have changed |
+| Target          | Native fallback                           | Pack shape                 | Evidence and remaining boundary                                     |
+| --------------- | ----------------------------------------- | -------------------------- | ------------------------------------------------------------------- |
+| Codex           | `$telic:telic`                            | Native source plugin       | Reference pack; full clean lifecycle remains a release gate         |
+| Claude Code     | `/telic:telic`                            | Native source plugin       | Config and transport tested; Claude lifecycle untested              |
+| Antigravity CLI | `/telic`                                  | Native source plugin       | `agy 1.1.1` schema passes; installed working directory unproven     |
+| Cursor          | `/telic`                                  | Project `.cursor/` overlay | Config and transport tested; IDE/CLI lifecycle untested             |
+| Kiro IDE        | Select **Telic**, then `Telic: <request>` | Project `.kiro/` overlay   | Agent/config/transport tested; real IDE lifecycle untested          |
+| Kiro CLI        | `/agent swap telic`, then `/telic`        | Project `.kiro/` overlay   | `kiro-cli 2.12.1` schema passes; lifecycle untested                 |
+| Cline           | `/telic`                                  | Project `.cline/` overlay  | Experimental Skills must be enabled; MCP UI may still need checking |
+| Roo Code        | `/telic`                                  | Legacy `.roo/` overlay     | Confirm installed version; upstream routes and layouts have changed |
 
 The complete layouts and cautions are in [`adapters/README.md`](../adapters/README.md).
 No adapter should promise identical behavior merely because its host supports

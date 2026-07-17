@@ -26,6 +26,7 @@ fallback.
 | Claude Code     | `claude-code/telic/` plugin       | `/telic:telic`                                     |
 | Antigravity CLI | `antigravity/telic/` plugin       | `/telic`; native IDE activation remains unverified |
 | Cursor          | `cursor/project/.cursor/` overlay | `/telic`                                           |
+| Kiro IDE        | `kiro-ide/project/.kiro/` overlay | select **Telic**, then `Telic: <request>`          |
 | Kiro CLI        | `kiro/project/.kiro/` overlay     | `/agent swap telic`, then `/telic`                 |
 | Cline           | `cline/project/.cline/` overlay   | enable experimental Skills, then `/telic`          |
 | Roo Code        | `roo-code/project/.roo/` overlay  | `/telic`                                           |
@@ -42,7 +43,7 @@ called production-supported.
 
 The transport smoke test resolves every bundled server from the adapter's
 source-preview root, connects over STDIO, and verifies the shared MCP prompt and
-seven-tool contract. This proves the generated files agree with the checked-in
+nine-tool contract. This proves the generated files agree with the checked-in
 configurations. It does not prove that a host launches them from the same working
 directory. In particular, Antigravity accepts the relative MCP path during
 plugin validation, but its installed plugin lifecycle and working-directory
@@ -112,6 +113,36 @@ the `mcpServers.telic` object from the preview `mcp.json` into the existing
 `.cursor/mcp.json`. Reload Cursor, confirm `telic` under MCP settings, and run
 `/telic <request>`. Removal means deleting only those two Telic directories and
 the `telic` MCP entry.
+
+### Kiro IDE
+
+Kiro IDE and Kiro CLI use different agent formats. This preview uses Kiro IDE's
+workspace MCP configuration, workspace skill, and Markdown custom agent.
+
+If the target has no `.kiro/` directory, copy the complete overlay:
+
+```bash
+cp -R "$TELIC_ROOT/adapters/kiro-ide/project/.kiro" "$TARGET/"
+```
+
+For an existing `.kiro/`, merge the Telic-owned `settings/mcp.json` server
+entry, `agents/telic.md`, `skills/telic/`, and `telic/` paths. Do not replace
+other MCP servers or agents. Trust the workspace, enable MCP support in Kiro if
+needed, and save the MCP configuration. Kiro reconnects after the file saves.
+Confirm the local `telic` server in the MCP Servers panel, select **Telic** in
+the agent selector, then send `Telic: <request>`.
+
+The agent is instructed to show a concise phase/status line after each accepted
+transition. To resume, ask it to resume Telic work; it lists local run metadata
+and asks which run to continue. Cancellation records a terminal run state but
+does not produce a final report. Confirm this behavior in your installed Kiro
+IDE before relying on it.
+
+This is a source-preview overlay. Its launcher derives
+`TELIC_REPOSITORY_ROOT` from the checked-in `.kiro/` overlay rather than the
+process working directory. The repository smoke test covers that local STDIO
+behavior; Kiro's editor lifecycle remains unverified. Remove only the
+Telic-owned paths and the `telic` MCP entry to uninstall.
 
 ### Kiro CLI
 

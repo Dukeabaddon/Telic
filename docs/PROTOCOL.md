@@ -100,10 +100,10 @@ Parallel execution would not turn Telic into a decentralized swarm.
 
 The implemented MCP surface is a state and artifact boundary. Version `0.1.1`
 exposes `telic_start_run`, `telic_ground_context`,
-`telic_get_next_action`, `telic_submit_artifact`, `telic_get_run`,
-`telic_get_artifact`, and `telic_get_trace`. These source-preview names can
-still change before the first compatibility release; [API.md](API.md) is the
-current transport reference.
+`telic_get_next_action`, `telic_submit_artifact`, `telic_cancel_run`,
+`telic_list_runs`, `telic_get_run`, `telic_get_artifact`, and
+`telic_get_trace`. These source-preview names can still change before the first
+compatibility release; [API.md](API.md) is the current transport reference.
 
 The optional `telic_workflow` MCP prompt gives compatible hosts a portable
 workflow entry point. It renders host-side instructions for an exact request and

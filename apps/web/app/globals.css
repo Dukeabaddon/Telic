@@ -279,11 +279,12 @@ svg {
 
 .brand-mark {
   align-items: center;
+  background: transparent;
   display: inline-flex;
   flex: 0 0 auto;
   height: 38px;
   justify-content: center;
-  width: 39px;
+  width: 34px;
 }
 
 .brand-mark img {
@@ -2684,9 +2685,9 @@ svg {
 }
 
 .brand-mark {
-  background: var(--surface-raised);
-  border-color: var(--border-strong, #3a3a3a);
-  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   color: var(--text);
 }
 

@@ -8,9 +8,9 @@ export function Brand() {
         <Image
           alt=""
           height={38}
-          sizes="39px"
+          sizes="34px"
           src="/telic-logo.png"
-          width={39}
+          width={34}
         />
       </span>
       <span className="brand-wordmark">TELIC</span>

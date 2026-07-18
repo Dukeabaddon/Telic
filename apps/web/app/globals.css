@@ -2982,7 +2982,6 @@ svg {
 
 .feature-card:hover,
 .artifact-card:hover,
-.host-card:hover,
 .compatibility-hosts > span:hover {
   background: var(--surface-raised);
   border-color: var(--border-strong, #3a3a3a);
@@ -2990,7 +2989,6 @@ svg {
 }
 
 .artifact-card,
-.host-card,
 .compatibility-hosts > span {
   transition:
     background-color 180ms cubic-bezier(0.16, 1, 0.3, 1),

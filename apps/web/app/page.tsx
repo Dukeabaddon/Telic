@@ -12,10 +12,9 @@ import {
 
 import { DemoFrame } from "@/components/demo-frame";
 import { DemoVideo } from "@/components/demo-video";
-import { RoleExplorer } from "@/components/role-explorer";
 import { SectionHeading } from "@/components/section-heading";
 import { TrackedLink } from "@/components/tracked-link";
-import { comparisonRows, hosts, proofPoints, siteConfig } from "@/lib/site";
+import { comparisonRows, proofPoints, siteConfig } from "@/lib/site";
 
 const jsonLd = {
   "@context": "https://schema.org",
@@ -38,7 +37,7 @@ export default function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-      <section className="hero shell">
+      <section className="hero shell" data-scroll-reveal-static="">
         <div className="hero-copy">
           <div className="hero-badge">Local MCP workflow · Open source</div>
           <h1>
@@ -129,17 +128,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="section role-section section-divider">
-        <div className="shell">
-          <SectionHeading
-            eyebrow="Five logical roles"
-            title="One workflow. Clear responsibilities."
-            description="Each handoff has a typed input and output. The roles can run serially through your host’s active model—five responsibilities, not five paid models."
-          />
-          <RoleExplorer />
-        </div>
-      </section>
-
       <section className="section shell comparison-section">
         <SectionHeading
           eyebrow="The difference"
@@ -210,35 +198,6 @@ export default function HomePage() {
               );
             })}
           </div>
-        </div>
-      </section>
-
-      <section className="section shell hosts-section">
-        <div className="hosts-copy">
-          <p className="eyebrow">Meet your host where it works</p>
-          <h2>One protocol. Host-native entry points.</h2>
-          <p>
-            Start with the Codex reference plugin, or use the experimental
-            source adapters for other coding hosts.
-          </p>
-          <TrackedLink
-            className="text-link"
-            eventName="install_cta_clicked"
-            href="/install"
-          >
-            Choose your setup <ArrowRight aria-hidden="true" />
-          </TrackedLink>
-        </div>
-        <div className="host-grid" aria-label="Available host packages">
-          {hosts.map((host, index) => (
-            <div className="host-card" key={host}>
-              <span>{host.slice(0, 2).toUpperCase()}</span>
-              <strong>{host}</strong>
-              <small>
-                {index === 0 ? "Reference plugin" : "Source adapter"}
-              </small>
-            </div>
-          ))}
         </div>
       </section>
 

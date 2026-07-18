@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 export default function InstallPage() {
   return (
     <main className="page-main" id="main-content">
-      <header className="page-intro shell">
+      <header className="page-intro shell" data-scroll-reveal-static="">
         <p className="eyebrow">Install Telic</p>
         <h1>Bring the workflow to your coding host.</h1>
         <p>

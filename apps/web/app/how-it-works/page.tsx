@@ -25,7 +25,10 @@ export const metadata: Metadata = {
 export default function HowItWorksPage() {
   return (
     <main className="page-main" id="main-content">
-      <header className="page-intro shell page-intro-with-media">
+      <header
+        className="page-intro shell page-intro-with-media"
+        data-scroll-reveal-static=""
+      >
         <p className="eyebrow">Inside the workflow</p>
         <h1>Structure around the model work.</h1>
         <p>

@@ -2,7 +2,7 @@ import {
   ArrowRight,
   Check,
   ChevronRight,
-  CircleDotDashed,
+  FileSearch,
   Code2,
   GitFork,
   Network,
@@ -102,12 +102,7 @@ export default function HomePage() {
                   "permissions · evidence · done",
                   "done",
                 ],
-                [
-                  CircleDotDashed,
-                  "Evidence review",
-                  "src/ranking.ts",
-                  "active",
-                ],
+                [FileSearch, "Evidence review", "src/ranking.ts", "active"],
                 [
                   ShieldCheck,
                   "Release audit",

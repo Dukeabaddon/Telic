@@ -192,13 +192,6 @@ svg {
   text-transform: uppercase;
 }
 
-.eyebrow::before {
-  background: currentColor;
-  content: "";
-  height: 1px;
-  width: 24px;
-}
-
 .button {
   align-items: center;
   border: 1px solid transparent;

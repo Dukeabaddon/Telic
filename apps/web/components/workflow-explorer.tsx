@@ -66,6 +66,7 @@ export function WorkflowExplorer() {
       <div
         className="workflow-panel"
         id={`workflow-panel-${active.id}`}
+        key={active.id}
         role="tabpanel"
         aria-labelledby={`workflow-tab-${active.id}`}
         tabIndex={0}

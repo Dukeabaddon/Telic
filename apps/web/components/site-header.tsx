@@ -15,7 +15,6 @@ const navigation: readonly {
 }[] = [
   { href: "/how-it-works", label: "How it works", external: false },
   { href: "/install", label: "Install", external: false },
-  { href: "/demo", label: "Demo", external: false },
   { href: siteConfig.docs, label: "Docs", external: true },
 ];
 

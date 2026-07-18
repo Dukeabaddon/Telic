@@ -26,7 +26,7 @@ if (!executablePath) {
   );
 }
 
-const routes = ["/", "/how-it-works", "/install", "/demo"];
+const routes = ["/", "/how-it-works", "/install"];
 const viewports = [
   { name: "mobile-320", width: 320, height: 568 },
   { name: "mobile-390", width: 390, height: 844 },

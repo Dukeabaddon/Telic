@@ -163,10 +163,10 @@ export default function HomePage() {
           />
           <TrackedLink
             className="text-link"
-            eventName="demo_page_clicked"
-            href="/demo"
+            eventName="how_it_works_clicked"
+            href="/how-it-works"
           >
-            See the walkthrough
+            See how it works
             <ArrowRight aria-hidden="true" />
           </TrackedLink>
         </div>

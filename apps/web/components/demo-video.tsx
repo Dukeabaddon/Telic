@@ -29,7 +29,7 @@ export function DemoVideo() {
   return (
     <figure className="demo-video">
       <video
-        aria-describedby="demo-transcript"
+        aria-label="Silent Telic product walkthrough showing a recommendation-bias analysis"
         autoPlay
         loop
         muted

@@ -10,6 +10,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
+import { DemoVideo } from "@/components/demo-video";
 import { RoleExplorer } from "@/components/role-explorer";
 import { SectionHeading } from "@/components/section-heading";
 import { TrackedLink } from "@/components/tracked-link";
@@ -34,6 +35,13 @@ export default function HowItWorksPage() {
           and review.
         </p>
       </header>
+
+      <section
+        className="section-compact shell"
+        aria-label="Product walkthrough"
+      >
+        <DemoVideo />
+      </section>
 
       <section className="section-compact shell">
         <WorkflowExplorer />

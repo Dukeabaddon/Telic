@@ -1287,11 +1287,7 @@ svg {
 }
 
 .final-cta-section {
-  padding-top: 72px;
-}
-
-.final-cta-section .section-heading {
-  margin-bottom: 36px;
+  padding-top: 40px;
 }
 
 .page-intro-with-media {
@@ -1300,7 +1296,19 @@ svg {
 
 .walkthrough-section {
   padding-top: 0;
-  padding-bottom: 72px;
+  padding-bottom: 48px;
+}
+
+.workflow-lead-section {
+  padding-block: 48px 28px;
+}
+
+.workflow-lead-section .section-heading {
+  margin-bottom: 0;
+}
+
+.workflow-explorer-section {
+  padding-top: 28px;
 }
 
 .final-cta {

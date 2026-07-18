@@ -299,11 +299,6 @@ export default function HomePage() {
 
       <section className="section final-cta-section">
         <div className="shell">
-          <SectionHeading
-            eyebrow="From request to report"
-            title="Keep the workflow close to the work."
-            description="Telic stays local to your coding host: one clear mode, inspectable artifacts, and a final report that only claims what the evidence supports."
-          />
           <div className="final-cta">
             <div>
               <p className="eyebrow">Start with the request you have</p>

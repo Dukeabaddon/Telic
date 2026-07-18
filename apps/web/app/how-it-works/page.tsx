@@ -43,7 +43,15 @@ export default function HowItWorksPage() {
         <DemoVideo />
       </section>
 
-      <section className="section-compact shell">
+      <section className="section shell workflow-lead-section">
+        <SectionHeading
+          eyebrow="The workflow spine"
+          title="One sequence. Eight inspectable stages."
+          description="Each stage has a typed input and output. Telic moves from a rough prompt through context, contracts, action, verification, and an honest report—without expanding authority on its own."
+        />
+      </section>
+
+      <section className="section-compact shell workflow-explorer-section">
         <WorkflowExplorer />
       </section>
 

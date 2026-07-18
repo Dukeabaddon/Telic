@@ -273,28 +273,32 @@ svg {
 .brand {
   align-items: center;
   display: inline-flex;
-  font-size: 1.02rem;
-  font-weight: 800;
-  gap: 10px;
-  letter-spacing: -0.025em;
+  gap: 11px;
   min-height: 44px;
 }
 
 .brand-mark {
   align-items: center;
-  background: var(--surface-raised);
-  border: 1px solid var(--border-strong);
-  border-radius: 9px;
-  color: var(--accent);
   display: inline-flex;
-  height: 34px;
+  flex: 0 0 auto;
+  height: 38px;
   justify-content: center;
-  width: 34px;
+  width: 39px;
 }
 
-.brand-mark svg {
-  height: 23px;
-  width: 23px;
+.brand-mark img {
+  height: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
+.brand-wordmark {
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  line-height: 1;
+  text-transform: uppercase;
 }
 
 .desktop-nav {

@@ -3169,3 +3169,24 @@ svg {
     background-color 220ms cubic-bezier(0.16, 1, 0.3, 1),
     color 220ms cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+/* Progressive scroll reveals: content stays visible until JavaScript opts in. */
+html[data-scroll-reveal-ready] [data-scroll-reveal] {
+  opacity: 0;
+  transform: translateY(22px);
+  transition:
+    opacity 520ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 520ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html[data-scroll-reveal-ready] [data-scroll-reveal-visible] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-scroll-reveal-ready] [data-scroll-reveal] {
+    opacity: 1;
+    transform: none;
+  }
+}

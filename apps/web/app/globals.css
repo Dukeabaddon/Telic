@@ -273,7 +273,7 @@ svg {
 .brand {
   align-items: center;
   display: inline-flex;
-  gap: 11px;
+  gap: 10px;
   min-height: 44px;
 }
 
@@ -282,9 +282,9 @@ svg {
   background: transparent;
   display: inline-flex;
   flex: 0 0 auto;
-  height: 38px;
+  height: 26px;
   justify-content: center;
-  width: 34px;
+  width: 24px;
 }
 
 .brand-mark img {
@@ -295,9 +295,9 @@ svg {
 
 .brand-wordmark {
   font-family: var(--font-sans);
-  font-size: 0.9rem;
-  font-weight: 700;
-  letter-spacing: 0.16em;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
   line-height: 1;
   text-transform: uppercase;
 }

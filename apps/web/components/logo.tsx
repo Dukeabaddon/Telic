@@ -7,10 +7,10 @@ export function Brand() {
       <span className="brand-mark" aria-hidden="true">
         <Image
           alt=""
-          height={38}
-          sizes="34px"
+          height={26}
+          sizes="24px"
           src="/telic-logo.png"
-          width={34}
+          width={24}
         />
       </span>
       <span className="brand-wordmark">TELIC</span>

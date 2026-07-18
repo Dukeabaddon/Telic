@@ -4,14 +4,27 @@ import { track } from "@vercel/analytics";
 import { ChevronDown } from "lucide-react";
 import { useRef, useState } from "react";
 
+import { TabLineIndicator } from "@/components/tab-line-indicator";
+import { useTabLineIndicator } from "@/components/use-tab-line-indicator";
 import { roles } from "@/lib/site";
 
 export function RoleExplorer() {
   const [activeId, setActiveId] = useState<(typeof roles)[number]["id"]>(
     roles[0].id,
   );
+  const listRef = useRef<HTMLDivElement>(null);
   const tabsRef = useRef<Array<HTMLButtonElement | null>>([]);
   const active = roles.find((role) => role.id === activeId) ?? roles[0];
+  const activeIndex = Math.max(
+    roles.findIndex((role) => role.id === activeId),
+    0,
+  );
+  const indicator = useTabLineIndicator(
+    listRef,
+    tabsRef,
+    activeIndex,
+    "vertical",
+  );
 
   function select(index: number) {
     const role = roles[index];
@@ -40,10 +53,16 @@ export function RoleExplorer() {
   return (
     <div className="role-explorer">
       <div
+        ref={listRef}
         className="role-tabs"
         role="tablist"
         aria-label="Telic logical roles"
       >
+        <TabLineIndicator
+          orientation="vertical"
+          ready={indicator.ready}
+          style={indicator.style}
+        />
         {roles.map((role, index) => (
           <button
             ref={(node) => {
@@ -69,6 +88,7 @@ export function RoleExplorer() {
       <div
         className="role-panel"
         id={`panel-${active.id}`}
+        key={active.id}
         role="tabpanel"
         aria-labelledby={`tab-${active.id}`}
         tabIndex={0}

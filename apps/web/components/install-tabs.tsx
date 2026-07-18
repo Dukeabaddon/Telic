@@ -5,12 +5,16 @@ import { CheckCircle2, Info } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { CopyButton } from "@/components/copy-button";
+import { TabLineIndicator } from "@/components/tab-line-indicator";
+import { useTabLineIndicator } from "@/components/use-tab-line-indicator";
 import { installGuides } from "@/lib/site";
 
 export function InstallTabs() {
   const [activeIndex, setActiveIndex] = useState(0);
+  const listRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const guide = installGuides[activeIndex];
+  const indicator = useTabLineIndicator(listRef, tabRefs, activeIndex, "pill");
 
   function select(index: number) {
     setActiveIndex(index);
@@ -38,10 +42,16 @@ export function InstallTabs() {
   return (
     <div className="install-tabs">
       <div
+        ref={listRef}
         className="install-tablist"
         role="tablist"
         aria-label="Choose a coding host"
       >
+        <TabLineIndicator
+          orientation="pill"
+          ready={indicator.ready}
+          style={indicator.style}
+        />
         {installGuides.map((item, index) => (
           <button
             ref={(node) => {
@@ -64,6 +74,7 @@ export function InstallTabs() {
       <section
         className="install-panel"
         id={`install-panel-${guide.id}`}
+        key={guide.id}
         role="tabpanel"
         aria-labelledby={`install-tab-${guide.id}`}
         tabIndex={0}

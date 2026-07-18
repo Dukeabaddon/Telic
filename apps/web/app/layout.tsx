@@ -6,6 +6,7 @@ import "@fontsource-variable/manrope";
 import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
 
+import { ScrollReveal } from "@/components/scroll-reveal";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { siteConfig } from "@/lib/site";
@@ -69,6 +70,7 @@ export default function RootLayout({
           Skip to main content
         </a>
         <SiteHeader />
+        <ScrollReveal />
         {children}
         <SiteFooter />
         <Analytics />

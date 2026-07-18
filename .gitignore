@@ -64,3 +64,17 @@ docs/AUDIT_HANDOFF.md
 !adapters/roo-code/project/.roo/
 !adapters/roo-code/project/.roo/**
 adapters/**/dist/
+
+# Moat task system
+.moat/
+
+# Claude Code configuration
+.claude/
+
+# Windsurf configuration
+.windsurf/
+
+# Codex CLI configuration
+.codex/
+# Local Kiro MCP connections
+/.kiro/settings/mcp.json

@@ -1,4 +1,4 @@
-import { Check, CircleDashed, FileSearch, ShieldCheck } from "lucide-react";
+import { Check, FileSearch, ShieldCheck } from "lucide-react";
 
 export function DemoFrame({ compact = false }: { readonly compact?: boolean }) {
   return (
@@ -20,7 +20,7 @@ export function DemoFrame({ compact = false }: { readonly compact?: boolean }) {
             [Check, "Context", "complete"],
             [Check, "Problem frame", "complete"],
             [Check, "Task contract", "complete"],
-            [CircleDashed, "Evidence review", "active"],
+            [FileSearch, "Evidence review", "active"],
             [ShieldCheck, "Report", "pending"],
           ].map(([Icon, label, state]) => {
             const StageIcon = Icon as typeof Check;

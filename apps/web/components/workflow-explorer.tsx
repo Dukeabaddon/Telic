@@ -4,13 +4,22 @@ import { track } from "@vercel/analytics";
 import { ArrowRight } from "lucide-react";
 import { useRef, useState } from "react";
 
+import { TabLineIndicator } from "@/components/tab-line-indicator";
+import { useTabLineIndicator } from "@/components/use-tab-line-indicator";
 import { workflowStages } from "@/lib/site";
 
 export function WorkflowExplorer() {
   const [activeIndex, setActiveIndex] = useState(0);
+  const listRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const active = workflowStages[activeIndex];
   const ActiveIcon = active.icon;
+  const indicator = useTabLineIndicator(
+    listRef,
+    tabRefs,
+    activeIndex,
+    "horizontal",
+  );
 
   function select(index: number) {
     setActiveIndex(index);
@@ -38,10 +47,16 @@ export function WorkflowExplorer() {
   return (
     <div className="workflow-explorer">
       <div
+        ref={listRef}
         className="workflow-tabs"
         role="tablist"
         aria-label="Telic workflow stages"
       >
+        <TabLineIndicator
+          orientation="horizontal"
+          ready={indicator.ready}
+          style={indicator.style}
+        />
         {workflowStages.map((stage, index) => (
           <button
             ref={(node) => {
@@ -66,6 +81,7 @@ export function WorkflowExplorer() {
       <div
         className="workflow-panel"
         id={`workflow-panel-${active.id}`}
+        key={active.id}
         role="tabpanel"
         aria-labelledby={`workflow-tab-${active.id}`}
         tabIndex={0}

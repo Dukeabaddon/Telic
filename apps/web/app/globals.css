@@ -319,11 +319,8 @@ svg {
 
 .desktop-nav a:hover,
 .desktop-nav a[aria-current="page"] {
+  background: transparent;
   color: var(--text);
-}
-
-.desktop-nav a[aria-current="page"] {
-  background: rgba(255, 255, 255, 0.045);
 }
 
 .header-actions {
@@ -1290,7 +1287,20 @@ svg {
 }
 
 .final-cta-section {
-  padding-top: 40px;
+  padding-top: 72px;
+}
+
+.final-cta-section .section-heading {
+  margin-bottom: 36px;
+}
+
+.page-intro-with-media {
+  padding-bottom: 36px;
+}
+
+.walkthrough-section {
+  padding-top: 0;
+  padding-bottom: 72px;
 }
 
 .final-cta {
@@ -2541,6 +2551,14 @@ svg {
     padding-block: 76px 54px;
   }
 
+  .page-intro-with-media {
+    padding-bottom: 28px;
+  }
+
+  .walkthrough-section {
+    padding-bottom: 56px;
+  }
+
   .footer-grid {
     gap: 38px 24px;
     grid-template-columns: 1fr 1fr;
@@ -2692,7 +2710,8 @@ svg {
 }
 
 .desktop-nav a[aria-current="page"] {
-  background: var(--surface-raised);
+  background: transparent;
+  color: var(--text);
 }
 
 .mobile-nav-backdrop {
@@ -3159,13 +3178,12 @@ svg {
 }
 
 .desktop-nav a {
-  transition:
-    background-color 220ms cubic-bezier(0.16, 1, 0.3, 1),
-    color 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: color 220ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .desktop-nav a:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: transparent;
+  color: var(--text);
 }
 
 .install-tablist button,
@@ -3175,13 +3193,19 @@ svg {
     color 220ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Progressive scroll reveals: content stays visible until JavaScript opts in. */
+/* Progressive scroll reveals: animate in from the scroll direction. */
 html[data-scroll-reveal-ready] [data-scroll-reveal] {
   opacity: 0;
-  transform: translateY(22px);
+  transform: translateY(36px);
   transition:
-    opacity 520ms cubic-bezier(0.16, 1, 0.3, 1),
-    transform 520ms cubic-bezier(0.16, 1, 0.3, 1);
+    opacity 900ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 900ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: 40ms;
+  will-change: opacity, transform;
+}
+
+html[data-scroll-reveal-ready] [data-scroll-reveal="up"] {
+  transform: translateY(-36px);
 }
 
 html[data-scroll-reveal-ready] [data-scroll-reveal-visible] {
@@ -3193,5 +3217,6 @@ html[data-scroll-reveal-ready] [data-scroll-reveal-visible] {
   html[data-scroll-reveal-ready] [data-scroll-reveal] {
     opacity: 1;
     transform: none;
+    transition: none;
   }
 }

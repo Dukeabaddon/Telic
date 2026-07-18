@@ -26,7 +26,7 @@ export const metadata: Metadata = {
 export default function HowItWorksPage() {
   return (
     <main className="page-main" id="main-content">
-      <header className="page-intro shell">
+      <header className="page-intro shell page-intro-with-media">
         <p className="eyebrow">Inside the workflow</p>
         <h1>Structure around the model work.</h1>
         <p>
@@ -37,7 +37,7 @@ export default function HowItWorksPage() {
       </header>
 
       <section
-        className="section-compact shell"
+        className="section-compact shell walkthrough-section"
         aria-label="Product walkthrough"
       >
         <DemoVideo />

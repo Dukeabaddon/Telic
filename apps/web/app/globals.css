@@ -3334,3 +3334,14 @@ html[data-scroll-reveal-ready] [data-scroll-reveal-visible] {
     transition: none;
   }
 }
+
+/* Host brand marks are transparent SVGs; keep the chip unboxed. */
+.compatibility-hosts i {
+  background: transparent;
+  border: 0;
+}
+
+.compatibility-hosts i svg {
+  height: 18px;
+  width: 18px;
+}

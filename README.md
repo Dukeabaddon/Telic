@@ -24,8 +24,8 @@ or hosted Telic service is required.
 Start with the way people naturally ask for help:
 
 ```text
-Telic: every customer is receiving the same product recommendation. I do not
-know if the ranking logic is broken or the data is biased. Analyze only.
+Telic: Is the profession recommendation algorithm flawed, and are the school
+recommendations appropriate for each profession? Analyze only. Do not change files.
 ```
 
 Telic turns that into an inspectable workflow:
@@ -192,6 +192,40 @@ Telic is a public preview.
 
 Read the [current implementation status](docs/STATUS.md) for exact technical
 boundaries.
+
+## Built with Codex and GPT-5.6
+
+Telic was built through an iterative author–Codex collaboration during OpenAI
+Build Week. The author set the product direction, selected the evidence and
+permission boundaries, tested real host setups, and made the final decisions.
+Codex with GPT-5.6 turned those decisions into code, tests, packaging, website
+work, and release documentation.
+
+The working method was deliberately dialectical: each promising idea was
+challenged against its cost, safety, and portability before becoming part of
+the product.
+
+| Initial direction                                        | Challenge                                                         | Product decision                                                            |
+| -------------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| A hosted prompt-engineering lab with many agents         | Extra accounts, API costs, and friction weaken developer adoption | A local workflow compiler that uses the coding host's active model          |
+| An agent that acts as soon as it understands the request | Ambiguous work can silently exceed the user's authority           | Explicit modes, immutable handoffs, and missing-permission denial           |
+| Five separate model agents                               | More model calls do not guarantee clearer responsibility          | Five logical roles that a host can run serially or with native subagents    |
+| Broad cross-host claims                                  | A configuration file is not evidence of a working lifecycle       | A Codex reference plugin, preview adapters, and explicit support boundaries |
+
+Codex was used end to end to compare architectures, implement the protocol and
+packages, add focused tests, audit permission and artifact behavior, diagnose
+installation failures, incorporate tester feedback, prepare npm/plugin assets,
+and build the public website. The author continuously supplied the product
+intent, approved tradeoffs, tested in real projects and IDEs, and rejected
+claims that could not be demonstrated. This loop shaped Telic itself:
+
+```text
+idea -> challenge -> evidence -> implementation -> test -> review -> revision -> release
+```
+
+The result is not a generated demo alone. It is a tested local control plane,
+an installable Codex plugin, a published npm package, and a public product
+experience with documented limits.
 
 ## Develop Telic
 

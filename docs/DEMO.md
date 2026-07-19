@@ -85,10 +85,8 @@ the Codex extension.
 Suggested demo request:
 
 ```text
-Telic: investigate why this project is not talking to its API. Analyze only.
-Do not change files. Inspect repository evidence and available runtime evidence.
-If browser or DevTools access is unavailable, say so instead of inventing
-results.
+Telic: Is the profession recommendation algorithm flawed, and are the school
+recommendations appropriate for each profession? Analyze only. Do not change files.
 ```
 
 Expected high-level flow:

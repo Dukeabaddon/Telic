@@ -39,8 +39,9 @@ export function DemoFrame({ compact = false }: { readonly compact?: boolean }) {
           <div className="demo-prompt">
             <span>User request</span>
             <p>
-              PUP is always ranked first. Is the matching logic broken, or is
-              the data biased? Analyze only.
+              Telic: Is the profession recommendation algorithm flawed, and are
+              the school recommendations appropriate for each profession?
+              Analyze only. Do not change files.
             </p>
           </div>
           <div className="demo-evidence-card">

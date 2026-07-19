@@ -13,7 +13,10 @@ import {
 
 describe("Telic website content", () => {
   it("keeps the public visual system monochrome", () => {
-    const files = ["apps/web/app/globals.css", "apps/web/app/opengraph-image.tsx"];
+    const files = [
+      "apps/web/app/globals.css",
+      "apps/web/app/opengraph-image.tsx",
+    ];
     const source = files
       .map((file) => readFileSync(resolve(process.cwd(), file), "utf8"))
       .join("\n")
@@ -69,5 +72,18 @@ describe("Telic website content", () => {
       expect(guide.commands.trim().length).toBeGreaterThan(20);
       expect(guide.next.trim().length).toBeGreaterThan(20);
     }
+  });
+
+  it("uses the current controlled Build Week presentation", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "apps/web/components/demo-video.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain("telic-build-week-presentation.mp4");
+    expect(source).toContain("telic-build-week-presentation-poster.webp");
+    expect(source).toContain("controls");
+    expect(source).not.toContain("autoPlay");
+    expect(source).not.toContain("loop");
   });
 });

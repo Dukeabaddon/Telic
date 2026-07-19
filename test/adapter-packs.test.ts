@@ -156,7 +156,7 @@ describe("source-preview host adapters", () => {
     expect(skill).toContain("Do not activate for setup");
     expect(publicReadme).toContain("`Telic: <your request>`");
     expect(publicReadme).toContain("technical fallback");
-    expect(demo).toContain("Telic: investigate");
+    expect(demo).toContain("Telic: Is the profession recommendation algorithm");
     expect(demo).not.toContain("Use $telic:telic to investigate");
     expect(skill).toContain("$telic:telic");
     expect(skill).toContain("/telic:telic");

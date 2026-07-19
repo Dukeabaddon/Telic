@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.3.3",
+    "@types/node": "24.10.1",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "axe-core": "4.12.1",
@@ -27,6 +28,6 @@
     "typescript": "5.9.3"
   },
   "engines": {
-    "node": ">=24.15.0"
+    "node": ">=24"
   }
 }

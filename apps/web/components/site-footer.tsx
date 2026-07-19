@@ -8,7 +8,6 @@ const groups = [
     links: [
       ["How it works", "/how-it-works"],
       ["Install", "/install"],
-      ["Demo", "/demo"],
     ],
   },
   {

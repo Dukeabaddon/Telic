@@ -1,45 +1,35 @@
 "use client";
 
-import { Pause, Play } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
 export function DemoVideo() {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [isPlaying, setIsPlaying] = useState(true);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 
-    const respectMotionPreference = () => {
-      if (!mediaQuery.matches) return;
-      videoRef.current?.pause();
-      setIsPlaying(false);
+    const syncPlaybackPreference = () => {
+      const video = videoRef.current;
+      if (!video) return;
+
+      if (mediaQuery.matches) {
+        video.pause();
+        return;
+      }
+
+      void video.play().catch(() => undefined);
     };
 
-    respectMotionPreference();
-    mediaQuery.addEventListener("change", respectMotionPreference);
+    syncPlaybackPreference();
+    mediaQuery.addEventListener("change", syncPlaybackPreference);
     return () =>
-      mediaQuery.removeEventListener("change", respectMotionPreference);
+      mediaQuery.removeEventListener("change", syncPlaybackPreference);
   }, []);
-
-  async function togglePlayback() {
-    const video = videoRef.current;
-    if (!video) return;
-
-    if (video.paused) {
-      await video.play();
-      setIsPlaying(true);
-      return;
-    }
-
-    video.pause();
-    setIsPlaying(false);
-  }
 
   return (
     <figure className="demo-video">
       <video
-        aria-describedby="demo-transcript"
+        aria-label="Silent Telic product walkthrough showing a recommendation-bias analysis"
         autoPlay
         loop
         muted
@@ -54,24 +44,6 @@ export function DemoVideo() {
         />
         Your browser does not support this video format.
       </video>
-      <figcaption>
-        <span>Silent product walkthrough · 22 seconds</span>
-        <button
-          aria-label={
-            isPlaying ? "Pause product walkthrough" : "Play product walkthrough"
-          }
-          className="demo-video-control"
-          onClick={togglePlayback}
-          type="button"
-        >
-          {isPlaying ? (
-            <Pause aria-hidden="true" />
-          ) : (
-            <Play aria-hidden="true" />
-          )}
-          {isPlaying ? "Pause" : "Play"}
-        </button>
-      </figcaption>
     </figure>
   );
 }

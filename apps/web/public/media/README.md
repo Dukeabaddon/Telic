@@ -17,6 +17,5 @@ Recording requirements:
 - poster under 150 KB
 - no credentials, personal paths, notifications, or private repository data
 
-The current site intentionally renders a polished placeholder until these files
-exist. When replacing it, preserve a visible play/pause button, reduced-motion
-behavior, stable 16:9 dimensions, and the transcript on `/demo`.
+When replacing the walkthrough, preserve reduced-motion behavior and stable
+16:9 dimensions. The video is shown on `/how-it-works` below the page intro.

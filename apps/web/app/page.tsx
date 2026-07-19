@@ -2,7 +2,7 @@ import {
   ArrowRight,
   Check,
   ChevronRight,
-  CircleDotDashed,
+  FileSearch,
   Code2,
   GitFork,
   Network,
@@ -102,12 +102,7 @@ export default function HomePage() {
                   "permissions · evidence · done",
                   "done",
                 ],
-                [
-                  CircleDotDashed,
-                  "Evidence review",
-                  "src/ranking.ts",
-                  "active",
-                ],
+                [FileSearch, "Evidence review", "src/ranking.ts", "active"],
                 [
                   ShieldCheck,
                   "Release audit",
@@ -168,10 +163,10 @@ export default function HomePage() {
           />
           <TrackedLink
             className="text-link"
-            eventName="demo_page_clicked"
-            href="/demo"
+            eventName="how_it_works_clicked"
+            href="/how-it-works"
           >
-            See the walkthrough
+            See how it works
             <ArrowRight aria-hidden="true" />
           </TrackedLink>
         </div>

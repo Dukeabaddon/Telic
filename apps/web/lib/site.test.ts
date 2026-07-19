@@ -13,11 +13,7 @@ import {
 
 describe("Telic website content", () => {
   it("keeps the public visual system monochrome", () => {
-    const files = [
-      "apps/web/app/globals.css",
-      "apps/web/app/icon.svg",
-      "apps/web/app/opengraph-image.tsx",
-    ];
+    const files = ["apps/web/app/globals.css", "apps/web/app/opengraph-image.tsx"];
     const source = files
       .map((file) => readFileSync(resolve(process.cwd(), file), "utf8"))
       .join("\n")
@@ -27,6 +23,9 @@ describe("Telic website content", () => {
     expect(source).not.toMatch(/99,\s*228,\s*238|124,\s*131,\s*255/u);
     expect(source).toContain("manrope variable");
     expect(source).toContain("ibm plex mono");
+    expect(
+      readFileSync(resolve(process.cwd(), "apps/web/app/icon.png")).length,
+    ).toBeGreaterThan(0);
   });
 
   it("keeps navigation destinations secure and public", () => {

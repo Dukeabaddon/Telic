@@ -37,6 +37,20 @@ describe("Telic website content", () => {
     expect(siteConfig.url).toMatch(/^https:\/\//u);
   });
 
+  it("pins the site to dark mode independent of system preference", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "apps/web/app/globals.css"),
+      "utf8",
+    );
+    const layout = readFileSync(
+      resolve(process.cwd(), "apps/web/app/layout.tsx"),
+      "utf8",
+    );
+    expect(styles).toMatch(/color-scheme:\s*dark/u);
+    expect(layout).toContain('colorScheme: "dark"');
+    expect(layout).toContain('themeColor: "#090909"');
+  });
+
   it("uses unique ordered workflow and role identifiers", () => {
     expect(new Set(workflowStages.map((stage) => stage.id)).size).toBe(
       workflowStages.length,

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
-import { open, realpath, stat } from "node:fs/promises";
+import { lstat, open, realpath, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
 import {
@@ -186,9 +186,16 @@ export async function readBoundedTextFile(
   | { readonly kind: "binary" }
   | { readonly kind: "invalid_utf8" }
 > {
+  const linkInfo = await lstat(absolutePath);
+  if (linkInfo.isSymbolicLink()) {
+    throw new ContextSecurityError(
+      "Repository symlink cannot be opened as selected context.",
+    );
+  }
   const handle = await open(
     absolutePath,
-    constants.O_RDONLY | constants.O_NOFOLLOW,
+    constants.O_RDONLY |
+      (process.platform === "win32" ? 0 : constants.O_NOFOLLOW),
   );
   try {
     const info = await handle.stat();

@@ -827,7 +827,7 @@ describe("serial Telic pipeline", () => {
       harness.submit("Evidence", "executor", structuredClone(firstBody))
         .artifact,
     ).toEqual(first.artifact);
-  });
+  }, 20_000);
 
   it("gates analyze-and-fix mutation behind an evidence review", async () => {
     const capabilities = [

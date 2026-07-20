@@ -140,7 +140,11 @@ describe("SQLite ledger and content-addressed artifacts", () => {
       request.body,
     );
     expect(ledger.listTrace(run.runId)).toHaveLength(1);
-    expect(statSync(ledger.databasePath).mode & 0o777).toBe(0o600);
+    if (process.platform !== "win32") {
+      expect(statSync(ledger.databasePath).mode & 0o777).toBe(0o600);
+    } else {
+      expect(statSync(ledger.databasePath).isFile()).toBe(true);
+    }
   });
 
   it("detects content-addressed blob tampering", () => {

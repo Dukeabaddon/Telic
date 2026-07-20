@@ -309,7 +309,13 @@ describe("grounding input and fallback boundaries", () => {
       ]),
     );
 
-    expect(reasons.get("invalid_path")).toBe(1);
+    if (process.platform === "win32") {
+      // Windows treats the test backslash as a directory separator, so it
+      // cannot represent a repository filename containing a backslash.
+      expect(reasons.get("invalid_path") ?? 0).toBe(0);
+    } else {
+      expect(reasons.get("invalid_path")).toBe(1);
+    }
     expect(reasons.get("excluded_directory")).toBe(1);
     expect(reasons.get("non_regular_file")).toBe(1);
     expect(reasons.get("invalid_utf8")).toBe(1);

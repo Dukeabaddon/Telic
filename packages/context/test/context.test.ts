@@ -1,5 +1,12 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -237,7 +244,7 @@ describe("groundRepository", () => {
         active_paths: ["../outside.ts"],
       }),
     ).rejects.toThrow(
-      `Active path "../outside.ts" is outside Telic's repository root ${JSON.stringify(root)}`,
+      `Active path "../outside.ts" is outside Telic's repository root ${JSON.stringify(await realpath(root))}`,
     );
     await expect(
       groundRepository({

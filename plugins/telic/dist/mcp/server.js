@@ -31001,7 +31001,7 @@ import {
 // packages/context/dist/ground.js
 import { createHash as createHash2 } from "node:crypto";
 import { constants as constants2 } from "node:fs";
-import { open, realpath as realpath3, stat as stat3 } from "node:fs/promises";
+import { lstat as lstat2, open, realpath as realpath3, stat as stat3 } from "node:fs/promises";
 import { isAbsolute as isAbsolute2, relative as relative2, resolve as resolve2, sep as sep2 } from "node:path";
 
 // packages/context/dist/inventory.js
@@ -31604,7 +31604,11 @@ function isExcludedRepositoryPath(repositoryPath, prefixes) {
   return prefixes.some((prefix) => prefix.length === 0 || normalized === prefix || normalized.startsWith(`${prefix}/`));
 }
 async function readBoundedTextFile(absolutePath, maximumBytes) {
-  const handle = await open(absolutePath, constants2.O_RDONLY | constants2.O_NOFOLLOW);
+  const linkInfo = await lstat2(absolutePath);
+  if (linkInfo.isSymbolicLink()) {
+    throw new ContextSecurityError("Repository symlink cannot be opened as selected context.");
+  }
+  const handle = await open(absolutePath, constants2.O_RDONLY | (process.platform === "win32" ? 0 : constants2.O_NOFOLLOW));
   try {
     const info = await handle.stat();
     if (!info.isFile()) {

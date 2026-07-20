@@ -1,20 +1,21 @@
-# Telic website presentation media
+# Telic website demo media
 
-The website uses the Build Week presentation:
+Add the final recommendation-bias demo here:
 
 ```text
-telic-build-week-presentation.mp4
-telic-build-week-presentation-poster.webp
+telic-recommendation-bias-demo.mp4
+telic-recommendation-bias-demo.webm
+telic-recommendation-bias-poster.webp
 ```
 
 Recording requirements:
 
 - 1440 × 810, 16:9
-- muted and suitable for `playsInline`
-- user-controlled playback; do not autoplay or loop a full presentation
-- MP4 optimized for web delivery
+- 22 seconds maximum
+- muted, looping, and suitable for `playsInline`
+- MP4 under 4 MB
 - poster under 150 KB
-- no credentials, notifications, or private repository data
+- no credentials, personal paths, notifications, or private repository data
 
-When replacing the presentation, preserve stable 16:9 dimensions and the
-caption. The video is shown in the homepage product frame.
+When replacing the walkthrough, preserve reduced-motion behavior and stable
+16:9 dimensions. The video is shown in the homepage product frame.

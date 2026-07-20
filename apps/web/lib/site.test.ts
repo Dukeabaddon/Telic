@@ -95,16 +95,17 @@ describe("Telic website content", () => {
     }
   });
 
-  it("uses the current controlled Build Week presentation", () => {
+  it("uses the original autoplay recommendation-bias preview", () => {
     const source = readFileSync(
       resolve(process.cwd(), "apps/web/components/demo-video.tsx"),
       "utf8",
     );
 
-    expect(source).toContain("telic-build-week-presentation.mp4");
-    expect(source).toContain("telic-build-week-presentation-poster.webp");
-    expect(source).toContain("controls");
-    expect(source).not.toContain("autoPlay");
-    expect(source).not.toContain("loop");
+    expect(source).toContain("telic-recommendation-bias-demo.mp4");
+    expect(source).toContain("telic-recommendation-bias-poster.webp");
+    expect(source).toContain("autoPlay");
+    expect(source).toContain("loop");
+    expect(source).not.toContain("figcaption");
+    expect(source).not.toContain("Build Week presentation");
   });
 });

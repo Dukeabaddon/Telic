@@ -1,25 +1,49 @@
+"use client";
+
+import { useEffect, useRef } from "react";
+
 export function DemoVideo() {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+    const syncPlaybackPreference = () => {
+      const video = videoRef.current;
+      if (!video) return;
+
+      if (mediaQuery.matches) {
+        video.pause();
+        return;
+      }
+
+      void video.play().catch(() => undefined);
+    };
+
+    syncPlaybackPreference();
+    mediaQuery.addEventListener("change", syncPlaybackPreference);
+    return () =>
+      mediaQuery.removeEventListener("change", syncPlaybackPreference);
+  }, []);
+
   return (
     <figure className="demo-video">
       <video
-        aria-describedby="build-week-video-caption"
-        aria-label="Muted Telic Build Week presentation"
-        controls
+        aria-label="Silent Telic product walkthrough showing a recommendation-bias analysis"
+        autoPlay
+        loop
         muted
         playsInline
-        poster="/media/telic-build-week-presentation-poster.webp"
+        poster="/media/telic-recommendation-bias-poster.webp"
         preload="metadata"
+        ref={videoRef}
       >
         <source
-          src="/media/telic-build-week-presentation.mp4"
+          src="/media/telic-recommendation-bias-demo.mp4"
           type="video/mp4"
         />
         Your browser does not support this video format.
       </video>
-      <figcaption id="build-week-video-caption">
-        94-second Build Week walkthrough. Installation, configuration, and an
-        evidence-backed analysis in one recording.
-      </figcaption>
     </figure>
   );
 }

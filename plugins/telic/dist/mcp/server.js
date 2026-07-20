@@ -30991,7 +30991,7 @@ import { homedir } from "node:os";
 import {
   basename,
   dirname as dirname3,
-  isAbsolute as isAbsolute5,
+  isAbsolute as isAbsolute6,
   join as join2,
   relative as relative5,
   resolve as resolve5,
@@ -35228,6 +35228,7 @@ var FindingSchema = external_exports.object({
 });
 
 // packages/protocol/dist/controller.js
+import { isAbsolute as isAbsolute5, win32 } from "node:path";
 var RevisionBudgetsSchema = external_exports.object({
   promptRevisions: external_exports.number().int().min(0).max(1),
   postExecutionRemediations: external_exports.number().int().min(0).max(1),
@@ -35235,7 +35236,7 @@ var RevisionBudgetsSchema = external_exports.object({
   maximumSubagentDepth: external_exports.number().int().min(0).max(4)
 }).strict();
 var WorkingContextSchema = external_exports.object({
-  repositoryRoot: external_exports.string().min(1).max(4096).refine((value) => value.startsWith("/"), "Repository root must be absolute"),
+  repositoryRoot: external_exports.string().min(1).max(4096).refine((value) => isAbsolute5(value) || win32.isAbsolute(value), "Repository root must be absolute"),
   activeFiles: external_exports.array(RelativePathSchema).max(MAX_COLLECTION_ITEMS),
   applicableRuleRefs: external_exports.array(ReferenceUriSchema).max(MAX_COLLECTION_ITEMS)
 }).strict();
@@ -36908,7 +36909,7 @@ var REFERENCE_URI_PATTERN2 = /^(?:artifact|repo|trace):\/\/[A-Za-z0-9._~!$&'()*+
 var CANONICAL_BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u;
 function isPathContained2(root, target) {
   const fromRoot = relative5(root, target);
-  return fromRoot === "" || fromRoot !== ".." && !fromRoot.startsWith(`..${sep5}`) && !isAbsolute5(fromRoot);
+  return fromRoot === "" || fromRoot !== ".." && !fromRoot.startsWith(`..${sep5}`) && !isAbsolute6(fromRoot);
 }
 function canonicalProspectivePath(path) {
   let existingAncestor = resolve5(path);
@@ -37903,7 +37904,7 @@ async function startStdioServer() {
   await server.connect(new StdioServerTransport());
   console.error(`Telic MCP ready for ${repositoryRoot}`);
 }
-if (import.meta.url === new URL(process.argv[1] ?? "", "file:").href) {
+if (import.meta.main) {
   startStdioServer().catch((error51) => {
     const message = error51 instanceof Error ? error51.message : "Unknown startup error";
     console.error(

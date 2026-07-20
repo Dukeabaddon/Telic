@@ -99,6 +99,20 @@ export function InstallTabs() {
             <code>{guide.commands}</code>
           </pre>
         </div>
+        {guide.windowsCommands ? (
+          <div className="code-block">
+            <div className="code-block-bar">
+              <span>Windows PowerShell / configuration</span>
+              <CopyButton
+                text={guide.windowsCommands}
+                label={`Copy ${guide.label} Windows setup`}
+              />
+            </div>
+            <pre tabIndex={0}>
+              <code>{guide.windowsCommands}</code>
+            </pre>
+          </div>
+        ) : null}
         <div className="install-next">
           <strong>Then</strong>
           <p>{guide.next}</p>

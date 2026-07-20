@@ -108,6 +108,14 @@ If the target has no `.cursor/` directory, copy the complete overlay:
 cp -R "$TELIC_ROOT/adapters/cursor/project/.cursor" "$TARGET/"
 ```
 
+PowerShell equivalent:
+
+```powershell
+$telicRoot = "C:\\path\\to\\Telic"
+$target = "C:\\path\\to\\target-project"
+Copy-Item -Recurse -Force "$telicRoot\\adapters\\cursor\\project\\.cursor" $target
+```
+
 If `.cursor/` already exists, copy only `skills/telic/` and `telic/`, then merge
 the `mcpServers.telic` object from the preview `mcp.json` into the existing
 `.cursor/mcp.json`. Reload Cursor, confirm `telic` under MCP settings, and run

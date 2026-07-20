@@ -230,6 +230,7 @@ export interface InstallGuide {
   readonly title: string;
   readonly description: string;
   readonly commands: string;
+  readonly windowsCommands?: string;
   readonly next: string;
   readonly technicalFallback?: string;
 }
@@ -300,6 +301,9 @@ npm run build
 export TELIC_ROOT="$PWD"
 export TARGET="/absolute/path/to/target-project"
 cp -R "$TELIC_ROOT/adapters/cursor/project/.cursor" "$TARGET/"`,
+    windowsCommands: `$telicRoot = "C:\\path\\to\\Telic"
+$target = "C:\\path\\to\\target-project"
+Copy-Item -Recurse -Force "$telicRoot\\adapters\\cursor\\project\\.cursor" $target`,
     next: "Reload Cursor, confirm telic under MCP settings, and run /telic <request>.",
     technicalFallback:
       "For an existing .cursor directory, merge the Telic-owned skill, bundle, and MCP entry instead of replacing it.",
@@ -320,6 +324,19 @@ cp -R "$TELIC_ROOT/adapters/cursor/project/.cursor" "$TARGET/"`,
       "args": ["-y", "telic-mcp", "mcp"],
       "env": {
         "TELIC_REPOSITORY_ROOT": "/absolute/path/to/target-project"
+      }
+    }
+  }
+}`,
+    windowsCommands: `npx -y telic-mcp doctor --json
+
+{
+  "mcpServers": {
+    "telic": {
+      "command": "npx",
+      "args": ["-y", "telic-mcp", "mcp"],
+      "env": {
+        "TELIC_REPOSITORY_ROOT": "C:\\\\Users\\\\you\\\\source\\\\repos\\\\target-project"
       }
     }
   }

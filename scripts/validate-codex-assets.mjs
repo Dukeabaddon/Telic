@@ -196,7 +196,11 @@ for (const field of ["composerIcon", "logo"]) {
     pluginInterface[field],
     `plugin.json.interface.${field}`,
   );
-  if (!relative(pluginRoot, assetPath).startsWith("assets/")) {
+  const relativeAssetPath = relative(pluginRoot, assetPath).replaceAll(
+    "\\",
+    "/",
+  );
+  if (!relativeAssetPath.startsWith("assets/")) {
     fail(`plugin.json.interface.${field} must resolve inside assets/`);
   }
   const asset = text(assetPath);

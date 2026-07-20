@@ -1,23 +1,134 @@
+<div align="center">
+
 # Telic
 
-> Rough request in. Evidence-backed workflow out.
+**Rough request in. Evidence-backed workflow out.**
 
 [![npm](https://img.shields.io/npm/v/telic-mcp?label=telic-mcp)](https://www.npmjs.com/package/telic-mcp)
 ![Node.js](https://img.shields.io/badge/Node.js-%3E%3D24.15.0-339933)
+[![TypeScript](https://img.shields.io/badge/TypeScript-7.0-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![MCP](https://img.shields.io/badge/MCP-STDIO-0f172a)](https://modelcontextprotocol.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ![Telic workflow: Prompt, Restructure, Evaluate, Act, Verify, Report](assets/telic-hero.png)
 
-Telic is an opt-in workflow plugin, agent workflow compiler, and safety layer
-for coding agents. Give it a rough request. Telic turns that request into
-structured work, keeps the agent inside your permissions, checks the result,
-and reports only what the evidence supports.
+**A local workflow compiler and safety layer for coding agents.**  
+**No Telic cloud. No Telic model API key. Uses your host’s active model.**
+
+[Features](#-features) · [Tech stack](#️-tech-stack) · [Architecture](#️-architecture) · [Privacy](#-privacy) · [Accuracy](#-accuracy--how-verification-works) · [Install](#-install-and-use) · [Codex + GPT-5.6](#built-with-codex-and-gpt-56)
+
+</div>
+
+---
+
+Telic is an opt-in workflow plugin, agent workflow compiler, and safety layer for coding agents. Give it a rough request. Telic turns that request into structured work, keeps the agent inside your permissions, checks the result, and reports only what the evidence supports.
 
 **Prompt. Restructure. Evaluate. Act. Verify. Report.**
 
-Telic is local, model-independent, and available as a Codex plugin or portable
-MCP package. It uses your coding host's active model. No separate model API key
-or hosted Telic service is required.
+## Why Telic
+
+| A normal agent session | A Telic workflow |
+| --- | --- |
+| A vague request can expand silently | Intent, scope, and permissions become explicit |
+| “Done” may be only an agent claim | Completion claims must reference evidence |
+| Review can continue without a boundary | Contract revision and remediation are bounded |
+| Missing tools can invite guesses | Unavailable checks remain clearly unverified |
+
+Telic gives the coding agent a workflow spine. It does not replace the agent.
+
+## ✨ Features
+
+| Feature | Description |
+| --- | --- |
+| 🧭 **Rough-request compiler** | Turns `Telic: …` into inspectable roles, requirements, and handoffs |
+| 🔐 **Permission modes** | `report_only`, `plan_only`, `analyze_only`, `fix_only`, `analyze_and_fix` |
+| 🧾 **Evidence-backed reports** | Final claims must cite recorded evidence, not vibes |
+| 🧱 **Strict protocol** | Zod v4 schemas, camelCase bodies, `schemaVersion: "1.0"` |
+| 🗂️ **Local run ledger** | SQLite metadata + immutable SHA-256 artifact bodies |
+| 📦 **Bounded repo grounding** | Git / ripgrep / filesystem inventory with budgets and secret heuristics |
+| 🔌 **Codex plugin + MCP** | Reference Git marketplace plugin and portable `telic-mcp` npm package |
+| 🧩 **Host adapters** | Preview packs for Claude Code, Cursor, Antigravity, Kiro, Cline, Roo |
+| 🛑 **Missing permission = denial** | Telic does not silently broaden authority |
+
+## 🛠️ Tech stack
+
+| Layer | Technology | Version |
+| --- | --- | --- |
+| Runtime | Node.js | `>=24.15.0` |
+| Language | TypeScript | 7.0.x |
+| Protocol schemas | Zod | 4.4.3 |
+| MCP SDK | `@modelcontextprotocol/sdk` | 1.29.0 |
+| Ledger | Node.js `node:sqlite` (`DatabaseSync`) | built-in |
+| Artifact integrity | SHA-256 content-addressed store | local |
+| Bundle | esbuild | 0.28.1 |
+| Tests | Vitest + `@vitest/coverage-v8` | 4.1.10 |
+| Format | Prettier | 3.9.5 |
+| npm package | `telic-mcp` | 0.1.1 |
+| Website | Next.js + React | 16.2.x / 19.2.x |
+| Site styling | Tailwind CSS | 4.3.x |
+
+## 🏗️ Architecture
+
+```text
+Developer
+   │
+   ▼
+Host skill / command / MCP prompt
+   │
+   ▼
+Local STDIO MCP  (@telic/mcp)
+   ├─ RunController   (@telic/core)     phases, budgets, permissions
+   ├─ Repository grounder (@telic/context)
+   ├─ SQLite ledger + SHA-256 bodies
+   └─ Protocol validation (@telic/protocol)
+   │
+   ▼
+Host model authors semantic artifacts
+   │
+   ▼
+Controller accepts or rejects on evidence rules
+```
+
+| Package | Role |
+| --- | --- |
+| `@telic/protocol` | Strict artifact schemas and parsing |
+| `@telic/core` | Deterministic controller, permissions, ledger |
+| `@telic/context` | Bounded repository inventory and selection |
+| `@telic/mcp` | Nine local MCP tools + `telic_workflow` prompt |
+| `@telic/cli` / `telic-mcp` | Doctor, status, trace, artifact, mcp commands |
+| `plugins/telic` | Codex reference plugin + bundled MCP server |
+| `adapters/` | Source-preview packs for other hosts |
+
+Semantic reasoning stays in the host model. Deterministic software owns workflow state, schema validation, bounded context, immutable storage, and observable handoffs. The controller never calls a model.
+
+## 🔒 Privacy
+
+- ✅ No Telic-hosted service, accounts, ads, or Telic-controlled network backend
+- ✅ Runtime is local STDIO. State lives outside the repo in OS user-state storage
+- ✅ No telemetry in the Telic runtime
+- ✅ No separate Telic model API key. Work uses the host’s active model under that host’s policy
+- ✅ Selected source and evidence can still be sensitive. Review [PRIVACY.md](PRIVACY.md) and [SECURITY.md](SECURITY.md)
+- ✅ Secret scanning is heuristic. Do not ground repos you are unwilling to store locally
+
+## 🎯 Accuracy / how verification works
+
+Telic optimizes for **honest completion**, not fake confidence scores.
+
+| Step | What Telic enforces | What it does **not** claim |
+| --- | --- | --- |
+| Frame | Scenario and requirements become explicit artifacts | Perfect understanding of every repo |
+| Bound | Mode and permissions gate what may change | Interception of every host-native shell/editor action |
+| Ground | Context selection is budgeted, path-contained, and digest-tracked | A dedicated enterprise secret scanner |
+| Execute | Allowed work stays inside the approved contract | That the host model cannot be influenced by untrusted text |
+| Verify | Completion needs typed evidence and rule coverage | That unavailable checks were somehow “fine” |
+| Report | Unsupported claims stay unverified or blocked | A guaranteed correct fix without evidence |
+
+**Honest limits**
+
+- Host-native tools that bypass MCP are outside Telic’s call path. Prevention still needs host sandboxing and approvals.
+- Same-user OS access can rewrite local ledger files together. Use OS permissions for stronger separation.
+- Preview adapters prove package shape and protocol handshake, not every host’s marketplace lifecycle.
+- Telic is a public preview. See [docs/STATUS.md](docs/STATUS.md).
 
 ## From rough request to verified result
 
@@ -41,11 +152,6 @@ flowchart LR
     V --> O["Report honestly"]
 ```
 
-**What happens under the hood:** Telic studies the repository context, frames
-the problem, creates structured requirements, reviews the task, guides the work
-within your permissions, verifies the evidence, and produces an honest final
-report.
-
 The workflow uses five logical roles:
 
 1. **Scenario author** understands the repository and frames the real problem.
@@ -54,25 +160,11 @@ The workflow uses five logical roles:
 4. **Executor** investigates, plans, or changes the project when allowed.
 5. **Release auditor** verifies the evidence before reporting back.
 
-These roles can run serially through the active host model. Telic does not need
-five hosted models or five external API calls.
+These roles can run serially through the active host model. Telic does not need five hosted models or five external API calls.
 
-## Why developers use Telic
+## 🚀 Install and use
 
-| A normal agent session                 | A Telic workflow                               |
-| -------------------------------------- | ---------------------------------------------- |
-| A vague request can expand silently    | Intent, scope, and permissions become explicit |
-| “Done” may be only an agent claim      | Completion claims must reference evidence      |
-| Review can continue without a boundary | Contract revision and remediation are bounded  |
-| Missing tools can invite guesses       | Unavailable checks remain clearly unverified   |
-
-Telic gives the coding agent a workflow spine. It does not replace the agent.
-
-## Install and use
-
-Telic requires Node.js `>=24.15.0`. Open the setup that matches your coding
-host. The portable request form is `Telic: <your request>`; each host also has
-its own technical fallback when natural activation is unavailable.
+Telic requires Node.js `>=24.15.0`. Open the setup that matches your coding host. The portable request form is `Telic: <your request>`; each host also has its own technical fallback when natural activation is unavailable.
 
 <details open>
 <summary><strong>Codex plugin</strong></summary>
@@ -178,39 +270,33 @@ complete [installation guide](docs/INSTALLATION.md).
 
 State the boundary in normal language:
 
-| Mode              | What Telic may do                                   |
-| ----------------- | --------------------------------------------------- |
-| `report_only`     | Explain supplied facts or existing results          |
-| `plan_only`       | Produce a plan without executing it                 |
-| `analyze_only`    | Investigate without changing files or runtime state |
-| `fix_only`        | Apply a known correction inside the approved scope  |
-| `analyze_and_fix` | Diagnose first, then fix an evidenced root cause    |
+| Mode | What Telic may do |
+| --- | --- |
+| `report_only` | Explain supplied facts or existing results |
+| `plan_only` | Produce a plan without executing it |
+| `analyze_only` | Investigate without changing files or runtime state |
+| `fix_only` | Apply a known correction inside the approved scope |
+| `analyze_and_fix` | Diagnose first, then fix an evidenced root cause |
 
 Missing permission is denial. Telic does not silently broaden your request.
 
-Use Telic for ambiguous diagnoses, risky changes, security-sensitive work, or
-anything needing a clear evidence trail. Skip it for simple questions, typo
-fixes, formatting, and obvious one-file edits.
+Use Telic for ambiguous diagnoses, risky changes, security-sensitive work, or anything needing a clear evidence trail. Skip it for simple questions, typo fixes, formatting, and obvious one-file edits.
 
 ## Local by design
 
-Telic runs locally through STDIO and stores its run ledger outside your
-repository. It does not provide a hosted model service or send work to a Telic
-cloud. Selected source and submitted evidence can still be sensitive, so review
-[Security](SECURITY.md) and [Privacy](PRIVACY.md) before using private projects.
+Telic runs locally through STDIO and stores its run ledger outside your repository. It does not provide a hosted model service or send work to a Telic cloud. Selected source and submitted evidence can still be sensitive, so review [Security](SECURITY.md) and [Privacy](PRIVACY.md) before using private projects.
 
 ## Project status
 
 Telic is a public preview.
 
-| Distribution                            | Support   |
-| --------------------------------------- | --------- |
-| Codex Git marketplace plugin            | Available |
-| npm package `telic-mcp`                 | Published |
-| Additional host adapters in `adapters/` | Preview   |
+| Distribution | Support |
+| --- | --- |
+| Codex Git marketplace plugin | Available |
+| npm package `telic-mcp` | Published |
+| Additional host adapters in `adapters/` | Preview |
 
-Read the [current implementation status](docs/STATUS.md) for exact technical
-boundaries.
+Read the [current implementation status](docs/STATUS.md) for exact technical boundaries.
 
 ## Built with Codex and GPT-5.6
 

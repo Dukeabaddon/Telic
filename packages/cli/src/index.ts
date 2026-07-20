@@ -15,6 +15,20 @@ const defaultIo: CliIo = {
   stderr: (line) => process.stderr.write(`${line}\n`),
 };
 
+const MINIMUM_NODE_VERSION = [24, 15, 0] as const;
+
+export function supportsRequiredNodeVersion(version: string): boolean {
+  const match = /^(\d+)\.(\d+)\.(\d+)/.exec(version);
+  if (!match) return false;
+
+  const actual = match.slice(1).map(Number);
+  for (const [index, required] of MINIMUM_NODE_VERSION.entries()) {
+    const current = actual[index] ?? 0;
+    if (current !== required) return current > required;
+  }
+  return true;
+}
+
 function usage(): string {
   return [
     "Telic 0.1.1",
@@ -87,13 +101,9 @@ export async function runCli(
     const repository = repositoryFrom(args);
     const json = args.includes("--json");
     if (command === "doctor") {
-      const nodeMajor = Number.parseInt(
-        process.versions.node.split(".")[0] ?? "0",
-        10,
-      );
       const checks = {
         node: {
-          ok: nodeMajor >= 24,
+          ok: supportsRequiredNodeVersion(process.versions.node),
           version: process.versions.node,
           required: ">=24.15.0",
         },

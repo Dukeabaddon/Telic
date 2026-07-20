@@ -1,5 +1,8 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -17,6 +20,59 @@ afterEach(async () => {
 });
 
 describe("MCP transport", () => {
+  it("starts when the bundled server is launched directly", async () => {
+    const root = mkdtempSync(join(tmpdir(), "telic-mcp-direct-entry-"));
+    const stateDirectory = mkdtempSync(
+      join(tmpdir(), "telic-mcp-direct-state-"),
+    );
+    const entrypoint = fileURLToPath(
+      new URL("../dist/server.js", import.meta.url),
+    );
+    const child = spawn(process.execPath, [entrypoint], {
+      env: {
+        ...process.env,
+        TELIC_REPOSITORY_ROOT: root,
+        TELIC_STATE_DIR: stateDirectory,
+      },
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+    let stderr = "";
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(
+            new Error(`Timed out waiting for the direct MCP server: ${stderr}`),
+          );
+        }, 5_000);
+        child.stderr.on("data", (chunk: Buffer) => {
+          stderr += chunk.toString("utf8");
+          if (stderr.includes("Telic MCP ready for")) {
+            clearTimeout(timeout);
+            resolve();
+          }
+        });
+        child.once("error", (error) => {
+          clearTimeout(timeout);
+          reject(error);
+        });
+        child.once("exit", (code, signal) => {
+          clearTimeout(timeout);
+          reject(
+            new Error(
+              `Direct MCP server exited before readiness (code ${code}, signal ${signal}): ${stderr}`,
+            ),
+          );
+        });
+      });
+    } finally {
+      if (child.exitCode === null && child.signalCode === null) {
+        child.kill();
+        await once(child, "exit");
+      }
+    }
+  });
+
   it("rejects TELIC_STATE_DIR when it points inside the repository", async () => {
     const root = mkdtempSync(join(tmpdir(), "telic-mcp-state-boundary-"));
     const previousRepositoryRoot = process.env.TELIC_REPOSITORY_ROOT;

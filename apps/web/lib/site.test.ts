@@ -67,6 +67,13 @@ describe("Telic website content", () => {
     );
   });
 
+  it("shows Windows-safe setup for portable MCP and Cursor", () => {
+    const portable = installGuides.find((guide) => guide.id === "portable");
+    const cursor = installGuides.find((guide) => guide.id === "cursor");
+    expect(portable?.windowsCommands).toContain("C:\\\\Users\\\\you");
+    expect(cursor?.windowsCommands).toContain("Copy-Item");
+  });
+
   it("keeps every install guide actionable", () => {
     for (const guide of installGuides) {
       expect(guide.commands.trim().length).toBeGreaterThan(20);

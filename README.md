@@ -134,6 +134,25 @@ A generic STDIO MCP client can launch Telic with:
 }
 ```
 
+On Windows, use an escaped absolute path in JSON:
+
+```json
+{
+  "mcpServers": {
+    "telic": {
+      "command": "npx",
+      "args": ["-y", "telic-mcp", "mcp"],
+      "env": {
+        "TELIC_REPOSITORY_ROOT": "C:\\Users\\you\\source\\repos\\your-project"
+      }
+    }
+  }
+}
+```
+
+Run `npx -y telic-mcp doctor --json` before connecting the server. Node.js
+`24.15.0` or later is required. Node `24.11.0`, for example, is not supported.
+
 The npm package provides Telic's deterministic tools and portable workflow
 prompt. Your host still needs a skill, command, or equivalent workflow driver.
 

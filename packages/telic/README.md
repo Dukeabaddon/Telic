@@ -59,6 +59,25 @@ Example MCP configuration:
 }
 ```
 
+Windows example:
+
+```json
+{
+  "mcpServers": {
+    "telic": {
+      "command": "npx",
+      "args": ["-y", "telic-mcp", "mcp"],
+      "env": {
+        "TELIC_REPOSITORY_ROOT": "C:\\Users\\you\\source\\repos\\project"
+      }
+    }
+  }
+}
+```
+
+Run `npx -y telic-mcp doctor --json` first. Node `24.15.0` or later is
+required. Node `24.11.0` is not supported.
+
 Use `TELIC_STATE_DIR` to store run state outside the repository when needed.
 
 ## Commands

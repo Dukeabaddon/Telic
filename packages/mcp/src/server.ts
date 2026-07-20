@@ -22,7 +22,7 @@ export async function startStdioServer(): Promise<void> {
   console.error(`Telic MCP ready for ${repositoryRoot}`);
 }
 
-if (import.meta.url === new URL(process.argv[1] ?? "", "file:").href) {
+if (import.meta.main) {
   startStdioServer().catch((error: unknown) => {
     const message =
       error instanceof Error ? error.message : "Unknown startup error";

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isAbsolute, win32 } from "node:path";
 
 import {
   ArtifactTypeSchema,
@@ -35,7 +36,7 @@ export const WorkingContextSchema = z
       .min(1)
       .max(4_096)
       .refine(
-        (value) => value.startsWith("/"),
+        (value) => isAbsolute(value) || win32.isAbsolute(value),
         "Repository root must be absolute",
       ),
     activeFiles: z.array(RelativePathSchema).max(MAX_COLLECTION_ITEMS),

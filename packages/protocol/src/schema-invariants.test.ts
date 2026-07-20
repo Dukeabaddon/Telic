@@ -11,6 +11,7 @@ import {
   TaskContractSchema,
   TraceEventSchema,
   UserReportSchema,
+  WorkingContextSchema,
   WorkPlanSchema,
   WorkResultSchema,
 } from "./index.js";
@@ -30,6 +31,37 @@ function clone<T>(value: T): T {
 }
 
 describe("strict input and observability invariants", () => {
+  it.each([
+    "/workspace/telic",
+    "C:\\Users\\Aaron\\Telic",
+    "C:/Users/Aaron/Telic",
+    "\\\\server\\share\\telic",
+  ])(
+    "accepts an absolute repository root on every supported platform: %s",
+    (repositoryRoot) => {
+      expect(
+        WorkingContextSchema.safeParse({
+          repositoryRoot,
+          activeFiles: [],
+          applicableRuleRefs: [],
+        }).success,
+      ).toBe(true);
+    },
+  );
+
+  it.each(["relative/project", "C:relative\\project", "", "../outside"])(
+    "rejects a non-absolute repository root: %s",
+    (repositoryRoot) => {
+      expect(
+        WorkingContextSchema.safeParse({
+          repositoryRoot,
+          activeFiles: [],
+          applicableRuleRefs: [],
+        }).success,
+      ).toBe(false);
+    },
+  );
+
   it("rejects hidden chain-of-thought fields", () => {
     const parsed = PromptReviewSchema.safeParse(
       fixture("invalid-hidden-chain-of-thought.json"),

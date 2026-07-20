@@ -177,7 +177,7 @@ try {
   if (selectedInstall?.trim() !== "Portable MCP") {
     failures.push("install tabs did not support the End key");
   }
-  const copyButton = interactionPage.locator(".copy-button");
+  const copyButton = interactionPage.locator(".copy-button").first();
   await copyButton.click();
   await interactionPage.waitForFunction(
     () =>

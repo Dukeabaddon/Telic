@@ -21,6 +21,10 @@ release, or full lifecycle certification yet.
 No separate model API key, browser package, database server, service manager,
 open port, or global npm install is required.
 
+On Windows, run the npm commands from PowerShell or another supported terminal.
+Use a full drive or UNC path for `TELIC_REPOSITORY_ROOT`. In JSON, escape each
+backslash. Node `24.11.0` is below Telic's required `24.15.0` minimum.
+
 ## Install from npm
 
 Run without installing globally:
@@ -53,6 +57,22 @@ For a STDIO MCP client, use:
 ```
 
 Add `TELIC_STATE_DIR` to the `env` object when you want isolated run state.
+
+For Windows, the equivalent configuration is:
+
+```json
+{
+  "mcpServers": {
+    "telic": {
+      "command": "npx",
+      "args": ["-y", "telic-mcp", "mcp"],
+      "env": {
+        "TELIC_REPOSITORY_ROOT": "C:\\Users\\you\\source\\repos\\target-project"
+      }
+    }
+  }
+}
+```
 
 ## Build and verify from source
 
@@ -102,6 +122,13 @@ Or use the built CLI:
 
 ```bash
 TELIC_REPOSITORY_ROOT="$PWD" node packages/cli/dist/bin.js mcp
+```
+
+PowerShell equivalent:
+
+```powershell
+$env:TELIC_REPOSITORY_ROOT = (Get-Location).Path
+node packages/cli/dist/bin.js mcp
 ```
 
 The server writes MCP protocol traffic to stdout and diagnostics to stderr. It exits when the client disconnects or sends a termination signal. There is no background daemon.
@@ -267,6 +294,17 @@ ledger views; there is no visual inspector yet.
 ### Node check fails
 
 Use a Node version satisfying `>=24.15.0`; the core uses the current built-in `node:sqlite` API.
+
+`telic doctor --json` checks the complete minimum version. Upgrade Node when it
+reports `ok: false`; a package-manager engine warning is not safe to ignore.
+
+### Windows MCP process exits before discovery
+
+Use the published `npx` command from the MCP configuration and give it an
+escaped absolute repository path. For source adapters, rebuild Telic first,
+then reload Cursor or the host after copying the generated bundle. If the
+process still exits, capture stderr and confirm the command starts with Node
+`24.15.0` or later.
 
 ### MCP starts for the wrong repository
 

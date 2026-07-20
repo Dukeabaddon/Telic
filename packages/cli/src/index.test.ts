@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { runCli } from "./index.js";
+import { runCli, supportsRequiredNodeVersion } from "./index.js";
 
 function capture() {
   const stdout: string[] = [];
@@ -20,6 +20,14 @@ function capture() {
 }
 
 describe("Telic CLI", () => {
+  it("uses the same complete Node minimum as package metadata", () => {
+    expect(supportsRequiredNodeVersion("24.14.9")).toBe(false);
+    expect(supportsRequiredNodeVersion("24.15.0")).toBe(true);
+    expect(supportsRequiredNodeVersion("24.15.1")).toBe(true);
+    expect(supportsRequiredNodeVersion("25.0.0")).toBe(true);
+    expect(supportsRequiredNodeVersion("not-a-version")).toBe(false);
+  });
+
   it("reports local prerequisites without creating a ledger", async () => {
     const repository = mkdtempSync(join(tmpdir(), "telic-cli-"));
     const output = capture();

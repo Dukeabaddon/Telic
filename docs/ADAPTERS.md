@@ -33,7 +33,7 @@ The current portable packages own:
 - requested mode and effective permission projection;
 - repository inventory, ranking, budgets, and source provenance;
 - SQLite/content-addressed local persistence; and
-- nine STDIO MCP operations, one portable workflow prompt, and CLI inspection.
+- eleven STDIO MCP operations, one portable workflow prompt, and CLI inspection.
 
 They do not own host prompt routing, model inference, native agent creation, editor UI, or host tool approvals.
 
@@ -84,7 +84,7 @@ editor/shell/browser actions do not pass through the Telic MCP server. The skill
 and artifact reviewers can constrain and audit those actions, while preventive
 enforcement remains Codex sandbox/user approval policy.
 
-See [Installation](INSTALLATION.md) for the local marketplace flow and [API](API.md) for the MCP prompt and nine tools.
+See [Installation](INSTALLATION.md) for the local marketplace flow and [API](API.md) for the MCP prompt and eleven tools.
 
 ## Capability negotiation
 
@@ -100,7 +100,7 @@ the deterministic native fallback when description-based matching is unavailable
 `npm run build` copies the canonical skill and model-free MCP bundle into each
 pack. `npm run adapters:validate` checks paths, hashes, approval defaults, and
 host-specific configuration. The adapter smoke test launches every generated
-server and verifies `telic_workflow` plus the exact nine tools.
+server and verifies `telic_workflow` plus the exact eleven tools.
 
 | Target          | Native fallback                           | Pack shape                 | Evidence and remaining boundary                                     |
 | --------------- | ----------------------------------------- | -------------------------- | ------------------------------------------------------------------- |
@@ -112,6 +112,10 @@ server and verifies `telic_workflow` plus the exact nine tools.
 | Kiro CLI        | `/agent swap telic`, then `/telic`        | Project `.kiro/` overlay   | `kiro-cli 2.12.1` schema passes; lifecycle untested                 |
 | Cline           | `/telic`                                  | Project `.cline/` overlay  | Experimental Skills must be enabled; MCP UI may still need checking |
 | Roo Code        | `/telic`                                  | Legacy `.roo/` overlay     | Confirm installed version; upstream routes and layouts have changed |
+
+Cursor, Cline, and Roo preview packs also ship optional `broker-gate` hooks that call
+`telic broker-gate` before risky native tool use. They are preview mediation, not a
+universal host sandbox.
 
 The complete layouts and cautions are in [`adapters/README.md`](../adapters/README.md).
 No adapter should promise identical behavior merely because its host supports

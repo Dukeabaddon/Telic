@@ -1,6 +1,6 @@
 # Telic implementation status
 
-**Last checked:** July 16, 2026
+**Last checked:** August 12, 2026
 
 Telic is an executable, local source preview. It is suitable for development and hackathon demonstration, not yet a supported release. The canonical truth for serialization is `packages/protocol/src/`; this page distinguishes current behavior from design targets elsewhere in the documentation.
 
@@ -10,10 +10,13 @@ Telic is an executable, local source preview. It is suitable for development and
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Protocol        | Strict Zod v4 schemas for controller, intent, serial execution, evidence, release, and trace artifacts; canonical bodies use camelCase and `schemaVersion: "1.0"`        |
 | Controller      | Deterministic phase ordering, stage-aware verification preflight, one user-facing clarification, one contract revision, one shared remediation, and terminal reports     |
+| Topology (CAGT) | `micro`, `standard`, and `forensic` classification at `startRun`; EGEL promotes insufficient micro evidence to standard instead of terminal block               |
+| Tool broker       | `telic_check_tool_action` plus preview `telic broker-gate` hooks for Cursor, Cline, and Roo; host-native calls outside MCP remain unintercepted              |
+| Forensic replay   | `telic replay` CLI and `telic_replay_run` MCP inspector with digest verification; micro topology returns a degraded replay flag                               |
 | Persistence     | SQLite metadata/events plus immutable SHA-256-addressed JSON bodies; digest verification occurs on read                                                                  |
 | Context         | Bounded inventory; token-boundary path ranking; eight-file zero-score fallback cap; relevance/file/byte budgets; path, symlink, duplicate, and heuristic secret controls |
-| MCP             | Local STDIO server with nine tools plus a host-neutral `telic_workflow` prompt                                                                                           |
-| CLI             | npm-packaged and source-built `doctor`, `status`, `trace`, `artifact`, and `mcp` commands                                                                                |
+| MCP             | Local STDIO server with eleven tools plus a host-neutral `telic_workflow` prompt                                                                                           |
+| CLI             | npm-packaged and source-built `doctor`, `status`, `trace`, `artifact`, `replay`, `broker-gate`, and `mcp` commands                                                                                |
 | Host package    | Codex reference plugin plus seven experimental source packs generated from one canonical skill and MCP bundle                                                            |
 | Model access    | None in the runtime; the active host model authors semantic artifacts                                                                                                    |
 | Network service | None required; normal transport is local STDIO                                                                                                                           |
@@ -49,7 +52,7 @@ Current controls include strict schemas, bounded inputs, missing-reference rejec
 
 Important limits:
 
-- **Host-native actions are not intercepted.** If Codex or another host uses its own shell, editor, browser, or repository tool directly, the Telic MCP server is not in that call path. Telic artifact acceptance and review can reject or expose an unauthorized result; prevention still depends on host sandboxing, approvals, and adapter compliance.
+- **Host-native actions are mostly not intercepted.** If a host uses its own shell, editor, browser, or repository tool directly, Telic is not in that call path unless preview broker-gate hooks are installed (Cursor, Cline, Roo). Even then, prevention still depends on host sandboxing, approvals, and adapter compliance.
 - **Same-user state is not an adversarial vault.** SHA-256 and SQLite consistency detect ordinary corruption and mismatches. A malicious process with the same OS account and filesystem access may be able to replace metadata and blobs together. Use OS permissions and an isolated account/workspace for stronger separation.
 - **Secret scanning is heuristic.** It can miss uncommon credentials and can exclude harmless text. Do not ground repositories containing secrets you are unwilling to store locally, and do not treat the context selector as a dedicated secret scanner.
 - **Exact local artifacts may be sensitive.** Selected source and submitted evidence are stored exactly in the content-addressed store. Hashing is identity/integrity metadata, not anonymization.

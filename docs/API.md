@@ -38,14 +38,14 @@ Protocol JSON is written only to stdout. Diagnostics go to stderr.
 
 The server exposes one host-neutral prompt, `telic_workflow`. It accepts the exact
 `original_request` and a required Telic `mode`, then returns instructions for the
-host model to drive the nine MCP tools in controller order. The prompt does not
+host model to drive the eleven MCP tools in controller order. The prompt does not
 invoke a model, grant permissions, bypass host approvals, or intercept
 host-native tools. Clients without MCP prompt support can implement the same
 sequence directly from `telic_get_next_action`.
 
 ## MCP tools
 
-The server currently exposes exactly nine tools.
+The server currently exposes exactly eleven tools.
 
 ### `telic_start_run`
 
@@ -224,6 +224,30 @@ ledger's internal event projection.
 The ledger performs cursor and limit filtering in SQLite; the MCP server does not
 materialize the complete run trace before returning a page.
 
+### `telic_check_tool_action`
+
+Input:
+
+- `run_id`
+- `action_id`
+- `expected_run_version`
+- `capability` (for example `shell.exec`, `network.read`, or `repository.write`)
+- optional `target` (command, hostname, or path string)
+
+Evaluates a host-native tool call against the active run envelope and records a
+`broker_decision` trace event. Use it from preview broker-gate hooks or when a
+host can call MCP before executing risky native tools. It does not intercept
+calls that never reach Telic.
+
+### `telic_replay_run`
+
+Input: `run_id`.
+
+Returns a read-only forensic replay report with trace-ordered steps, per-artifact
+digest status, and trace highlights (for example escalation and broker denies).
+Micro topology runs return `{ degraded: true, reason: "micro_topology" }` instead
+of claiming full forensic replay fidelity. Artifact bodies are not returned.
+
 ## Canonical artifact families
 
 | Owner/stage         | Artifact               | Purpose                                                                                          |
@@ -255,6 +279,8 @@ telic doctor [--repo PATH] [--json]
 telic status RUN_ID [--repo PATH] [--json]
 telic trace RUN_ID [--repo PATH] [--json]
 telic artifact RUN_ID ARTIFACT_ID [--repo PATH] [--json]
+telic replay RUN_ID [--repo PATH] [--json]
+telic broker-gate [--repo PATH]
 telic mcp
 ```
 

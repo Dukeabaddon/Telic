@@ -104,12 +104,15 @@ The host obtains each `NextAction`, performs the logical reasoning turn, and sub
 ## Current product surface
 
 - local protocol/controller/context/ledger packages;
-- nine-tool STDIO MCP server plus the portable `telic_workflow` prompt;
+- eleven-tool STDIO MCP server plus the portable `telic_workflow` prompt;
 - source-built diagnostics and trace CLI;
 - Codex plugin and skill as the reference host driver;
 - seven experimental source packs for Claude Code, Antigravity, Cursor, Kiro IDE, Kiro CLI, Cline, and Roo Code;
 - all five intent modes in the protocol, with conservative limits documented in [STATUS.md](STATUS.md);
 - content-addressed exact artifacts and bounded context manifests;
+- CAGT topology (`micro` / `standard` / `forensic`) with EGEL escalation;
+- tool-broker checks and preview host broker-gate hooks;
+- forensic replay via CLI and `telic_replay_run`;
 - terminal trace output and artifact retrieval.
 
 Current source does **not** include browser/DevTools integration, a visual

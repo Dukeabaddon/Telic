@@ -51,9 +51,9 @@ Tree-sitter, LSP symbols, code graphs, and lossy compression are not implemented
 
 ### `@telic/mcp`
 
-Exposes nine tools over local STDIO: start, ground, next action, submit
-artifact/clarification, cancel, list runs, inspect run, retrieve artifact, and
-inspect trace. It also exposes the host-neutral `telic_workflow` prompt. It
+Exposes eleven tools over local STDIO: start, ground, next action, submit
+artifact/clarification, cancel, list runs, inspect run, retrieve artifact,
+inspect trace, check host tool actions, and replay runs. It also exposes the host-neutral `telic_workflow` prompt. It
 composes protocol/core/context behavior and writes protocol JSON only to stdout.
 
 MCP is not a prompt interceptor, model service, native-agent API, or universal host-policy hook. It can fail a Telic artifact submission; it cannot prevent a direct host-native shell/editor/browser action that bypasses its tools.

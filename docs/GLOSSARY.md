@@ -34,7 +34,19 @@ Model Context Protocol, a standard connection between an AI host and tools or co
 
 ### MCP server
 
-A local or remote process exposing MCP tools, resources, and prompts. The Telic source preview ships a local STDIO process exposing nine controller, context, trace, recovery, and artifact operations plus the `telic_workflow` prompt. It contains deterministic runtime behavior and does not call a model API.
+A local or remote process exposing MCP tools, resources, and prompts. The Telic source preview ships a local STDIO process exposing eleven controller, context, trace, recovery, broker, replay, and artifact operations plus the `telic_workflow` prompt. It contains deterministic runtime behavior and does not call a model API.
+
+### CAGT
+
+Complexity-Adaptive Governance Topology. Telic classifies each run as `micro`, `standard`, or `forensic` at `startRun` and routes it through the matching governance graph.
+
+### EGEL
+
+Evidence-Gated Escalation Ladder. When micro topology evidence is insufficient, Telic can promote the run to standard review instead of stopping with a terminal block.
+
+### Tool broker
+
+Deterministic permission check for host-native tool calls. `telic_check_tool_action` and preview `telic broker-gate` hooks record `broker_decision` trace events when a host asks before executing risky actions.
 
 ### MCP tool
 

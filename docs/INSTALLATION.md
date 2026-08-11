@@ -224,10 +224,13 @@ Codex resolves an explicit Telic request or selection
 Codex launches plugin-provided Telic STDIO process
         |
         v
-Host model calls nine deterministic Telic tools
+Host model calls eleven deterministic Telic tools
         |
         v
 Artifacts and trace persist in local XDG state
+        |
+        v
+(Optional) preview broker-gate hooks call `telic broker-gate` before risky native tools
         |
         v
 Codex disconnects; the process exits

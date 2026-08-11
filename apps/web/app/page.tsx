@@ -186,8 +186,8 @@ export default function HomePage() {
               ],
               [
                 Terminal,
-                "Local MCP runtime",
-                "A local STDIO server stores workflow state and calls no model API of its own.",
+                "Evidence-backed workflows",
+                "Every phase leaves inspectable artifacts, trace events, and digest-linked evidence—not hidden agent memory.",
               ],
             ].map(([Icon, title, description]) => {
               const FeatureIcon = Icon as typeof Code2;

@@ -38,17 +38,20 @@ Telic gives the coding agent a workflow spine. It does not replace the agent.
 
 ## ✨ Features
 
-| Feature                            | Description                                                               |
-| ---------------------------------- | ------------------------------------------------------------------------- |
-| 🧭 **Rough-request compiler**      | Turns `Telic: …` into inspectable roles, requirements, and handoffs       |
-| 🔐 **Permission modes**            | `report_only`, `plan_only`, `analyze_only`, `fix_only`, `analyze_and_fix` |
-| 🧾 **Evidence-backed reports**     | Final claims must cite recorded evidence, not vibes                       |
-| 🧱 **Strict protocol**             | Zod v4 schemas, camelCase bodies, `schemaVersion: "1.0"`                  |
-| 🗂️ **Local run ledger**            | SQLite metadata + immutable SHA-256 artifact bodies                       |
-| 📦 **Bounded repo grounding**      | Git / ripgrep / filesystem inventory with budgets and secret heuristics   |
-| 🔌 **Codex plugin + MCP**          | Reference Git marketplace plugin and portable `telic-mcp` npm package     |
-| 🧩 **Host adapters**               | Preview packs for Claude Code, Cursor, Antigravity, Kiro, Cline, Roo      |
-| 🛑 **Missing permission = denial** | Telic does not silently broaden authority                                 |
+| Feature                            | Description                                                                           |
+| ---------------------------------- | ------------------------------------------------------------------------------------- |
+| 🧭 **Rough-request compiler**      | Turns `Telic: …` into inspectable roles, requirements, and handoffs                   |
+| 🔐 **Permission modes**            | `report_only`, `plan_only`, `analyze_only`, `fix_only`, `analyze_and_fix`             |
+| 🧾 **Evidence-backed reports**     | Final claims must cite recorded evidence, not vibes                                   |
+| 🧱 **Strict protocol**             | Zod v4 schemas, camelCase bodies, `schemaVersion: "1.0"`                              |
+| 🗂️ **Local run ledger**            | SQLite metadata + immutable SHA-256 artifact bodies                                   |
+| 📦 **Bounded repo grounding**      | Git / ripgrep / filesystem inventory with budgets and secret heuristics               |
+| 🔌 **Codex plugin + MCP**          | Reference Git marketplace plugin and portable `telic-mcp` npm package                 |
+| 🧩 **Host adapters**               | Preview packs for Claude Code, Cursor, Antigravity, Kiro, Cline, Roo                  |
+| 🧭 **Topology compiler (CAGT)**    | Classifies runs as `micro`, `standard`, or `forensic` with bounded EGEL escalation    |
+| 🛡️ **Tool broker**                 | Checks host tool calls against run permissions; preview hooks can deny blocked writes |
+| 🔁 **Forensic replay**             | `telic replay` and `telic_replay_run` inspect digests and broker decisions            |
+| 🛑 **Missing permission = denial** | Telic does not silently broaden authority                                             |
 
 ## 🛠️ Tech stack
 
@@ -77,7 +80,7 @@ Host skill / command / MCP prompt
    │
    ▼
 Local STDIO MCP  (@telic/mcp)
-   ├─ RunController   (@telic/core)     phases, budgets, permissions
+   ├─ RunController   (@telic/core)     topology, phases, budgets, permissions, broker
    ├─ Repository grounder (@telic/context)
    ├─ SQLite ledger + SHA-256 bodies
    └─ Protocol validation (@telic/protocol)
@@ -89,15 +92,15 @@ Host model authors semantic artifacts
 Controller accepts or rejects on evidence rules
 ```
 
-| Package                    | Role                                           |
-| -------------------------- | ---------------------------------------------- |
-| `@telic/protocol`          | Strict artifact schemas and parsing            |
-| `@telic/core`              | Deterministic controller, permissions, ledger  |
-| `@telic/context`           | Bounded repository inventory and selection     |
-| `@telic/mcp`               | Nine local MCP tools + `telic_workflow` prompt |
-| `@telic/cli` / `telic-mcp` | Doctor, status, trace, artifact, mcp commands  |
-| `plugins/telic`            | Codex reference plugin + bundled MCP server    |
-| `adapters/`                | Source-preview packs for other hosts           |
+| Package                    | Role                                                      |
+| -------------------------- | --------------------------------------------------------- |
+| `@telic/protocol`          | Strict artifact schemas and parsing                       |
+| `@telic/core`              | Deterministic controller, permissions, ledger             |
+| `@telic/context`           | Bounded repository inventory and selection                |
+| `@telic/mcp`               | Eleven local MCP tools + `telic_workflow` prompt          |
+| `@telic/cli` / `telic-mcp` | Doctor, status, trace, artifact, replay, broker-gate, mcp |
+| `plugins/telic`            | Codex reference plugin + bundled MCP server               |
+| `adapters/`                | Source-preview packs for other hosts                      |
 
 Semantic reasoning stays in the host model. Deterministic software owns workflow state, schema validation, bounded context, immutable storage, and observable handoffs. The controller never calls a model.
 
@@ -117,7 +120,7 @@ Telic optimizes for **honest completion**, not fake confidence scores.
 | Step    | What Telic enforces                                               | What it does **not** claim                                 |
 | ------- | ----------------------------------------------------------------- | ---------------------------------------------------------- |
 | Frame   | Scenario and requirements become explicit artifacts               | Perfect understanding of every repo                        |
-| Bound   | Mode and permissions gate what may change                         | Interception of every host-native shell/editor action      |
+| Bound   | Mode, permissions, and the tool broker gate allowed work          | Interception of every host-native shell/editor action      |
 | Ground  | Context selection is budgeted, path-contained, and digest-tracked | A dedicated enterprise secret scanner                      |
 | Execute | Allowed work stays inside the approved contract                   | That the host model cannot be influenced by untrusted text |
 | Verify  | Completion needs typed evidence and rule coverage                 | That unavailable checks were somehow “fine”                |
@@ -125,7 +128,7 @@ Telic optimizes for **honest completion**, not fake confidence scores.
 
 **Honest limits**
 
-- Host-native tools that bypass MCP are outside Telic’s call path. Prevention still needs host sandboxing and approvals.
+- Host-native tools that bypass MCP are outside Telic’s call path unless the host loads Telic’s preview `broker-gate` hooks (Cursor, Cline, Roo). Prevention still needs host sandboxing and approvals.
 - Same-user OS access can rewrite local ledger files together. Use OS permissions for stronger separation.
 - Preview adapters prove package shape and protocol handshake, not every host’s marketplace lifecycle.
 - Telic is a public preview. See [docs/STATUS.md](docs/STATUS.md).
@@ -258,8 +261,9 @@ use separate packs. Each host stores skills, commands, and MCP configuration
 differently, so setup is host-specific.
 
 See [adapter setup](docs/ADAPTERS.md) for the correct files and activation
-syntax. Do not copy an adapter over existing configuration without reviewing
-the paths first.
+syntax. Cursor, Cline, and Roo preview packs also ship optional `broker-gate`
+hooks that call `telic broker-gate` before risky tool use. Do not copy an
+adapter over existing configuration without reviewing the paths first.
 
 </details>
 
@@ -348,6 +352,7 @@ See [Contributing](CONTRIBUTING.md) for the artifact-first workflow.
 - [Installation](docs/INSTALLATION.md)
 - [Example run](docs/EXAMPLE_RUN.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [CAGT / EGEL ADRs](docs/adr/)
 - [Protocol](docs/PROTOCOL.md)
 - [API reference](docs/API.md)
 - [Adapter setup](docs/ADAPTERS.md)

@@ -187,9 +187,7 @@ function registerTools(server: McpServer, service: TelicService): void {
           .array(z.string().min(1).max(253))
           .max(256)
           .default([]),
-        topology_override: z
-          .enum(["micro", "standard", "forensic"])
-          .optional(),
+        topology_override: z.enum(["micro", "standard", "forensic"]).optional(),
         prior_run_id: z.string().uuid().optional(),
       },
       annotations: {
@@ -218,9 +216,7 @@ function registerTools(server: McpServer, service: TelicService): void {
             ...(input.topology_override
               ? { topologyOverride: input.topology_override }
               : {}),
-            ...(input.prior_run_id
-              ? { priorRunId: input.prior_run_id }
-              : {}),
+            ...(input.prior_run_id ? { priorRunId: input.prior_run_id } : {}),
           }),
         });
       } catch (error) {
@@ -542,7 +538,6 @@ function registerTools(server: McpServer, service: TelicService): void {
         return errorResult(error);
       }
     },
-
   );
   server.registerTool(
     "telic_check_tool_action",
@@ -564,13 +559,7 @@ function registerTools(server: McpServer, service: TelicService): void {
         openWorldHint: false,
       },
     },
-    async ({
-      run_id,
-      action_id,
-      expected_run_version,
-      capability,
-      target,
-    }) => {
+    async ({ run_id, action_id, expected_run_version, capability, target }) => {
       try {
         const decision = service.checkToolAction({
           runId: run_id,
@@ -609,7 +598,6 @@ function registerTools(server: McpServer, service: TelicService): void {
       }
     },
   );
-
 }
 
 export function createTelicMcpServer(service: TelicService): McpServer {

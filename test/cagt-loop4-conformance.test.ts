@@ -21,10 +21,13 @@ function createTerminalPriorRun(repositoryRoot: string): {
   controller: RunController;
   priorRunId: string;
 } {
-  const ledger = new SqliteLedger(mkdtempSync(join(tmpdir(), "telic-loop4-ledger-")));
+  const ledger = new SqliteLedger(
+    mkdtempSync(join(tmpdir(), "telic-loop4-ledger-")),
+  );
   ledgers.push(ledger);
   const controller = new RunController(ledger, (type, body) => {
-    if (!isArtifactType(type)) throw new Error(`Unsupported artifact type: ${type}`);
+    if (!isArtifactType(type))
+      throw new Error(`Unsupported artifact type: ${type}`);
     return parseArtifactBody(type, body);
   });
   const started = controller.startRun({
@@ -66,8 +69,12 @@ describe("CAGT loop 4 conformance", () => {
   it("records lineage_linked when priorRunId is provided", () => {
     const repositoryRoot = mkdtempSync(join(tmpdir(), "telic-cagt-loop4-"));
     mkdirSync(join(repositoryRoot, "src"), { recursive: true });
-    writeFileSync(join(repositoryRoot, "src", "index.ts"), "export const x = 1;\n");
-    const { controller, ledger, priorRunId } = createTerminalPriorRun(repositoryRoot);
+    writeFileSync(
+      join(repositoryRoot, "src", "index.ts"),
+      "export const x = 1;\n",
+    );
+    const { controller, ledger, priorRunId } =
+      createTerminalPriorRun(repositoryRoot);
 
     const linked = controller.startRun({
       repositoryRoot,

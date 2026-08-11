@@ -85,9 +85,7 @@ describe("replay inspector", () => {
     const report = inspectRunReplay(ledger, ledger.requireRun(run.runId));
     expect(report.degraded).toBeUndefined();
     expect(report.steps.length).toBeGreaterThanOrEqual(2);
-    expect(report.steps.every((step) => step.digestStatus === "ok")).toBe(
-      true,
-    );
+    expect(report.steps.every((step) => step.digestStatus === "ok")).toBe(true);
     expect(report.steps[0]!.sequence).toBeLessThanOrEqual(
       report.steps[report.steps.length - 1]!.sequence,
     );

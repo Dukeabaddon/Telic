@@ -145,7 +145,10 @@ export async function runCli(
       const hookInput = raw.trim()
         ? (JSON.parse(raw) as Record<string, unknown>)
         : {};
-      const result = evaluateBrokerGate({ repositoryRoot: repository, hookInput });
+      const result = evaluateBrokerGate({
+        repositoryRoot: repository,
+        hookInput,
+      });
       process.stdout.write(`${JSON.stringify(result)}\n`);
       return 0;
     }

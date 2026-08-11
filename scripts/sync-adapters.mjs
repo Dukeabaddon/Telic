@@ -18,7 +18,10 @@ const canonicalBundle = resolve(
   repositoryRoot,
   "plugins/telic/dist/mcp/server.js",
 );
-const canonicalHook = resolve(repositoryRoot, "plugins/telic/hooks/broker-gate.mjs");
+const canonicalHook = resolve(
+  repositoryRoot,
+  "plugins/telic/hooks/broker-gate.mjs",
+);
 
 const skillTargets = [
   "adapters/claude-code/telic/skills/telic",
@@ -112,7 +115,10 @@ for (const target of bundleTargets) {
 }
 for (const target of hookTargets) {
   copyFile(canonicalHook, resolve(repositoryRoot, target.hook));
-  writeFileSync(resolve(repositoryRoot, target.config), `${hooksJson(target.prefix)}\n`);
+  writeFileSync(
+    resolve(repositoryRoot, target.config),
+    `${hooksJson(target.prefix)}\n`,
+  );
 }
 
 console.log(

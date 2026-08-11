@@ -22,7 +22,10 @@ function bindTemplate(
 async function createMicroReportHarness() {
   const repositoryRoot = mkdtempSync(join(tmpdir(), "telic-cagt-loop1-"));
   mkdirSync(join(repositoryRoot, "src"), { recursive: true });
-  writeFileSync(join(repositoryRoot, "src", "index.ts"), "export const x = 1;\n");
+  writeFileSync(
+    join(repositoryRoot, "src", "index.ts"),
+    "export const x = 1;\n",
+  );
   const service = new TelicService({
     repositoryRoot,
     stateDirectory: mkdtempSync(join(tmpdir(), "telic-cagt-loop1-state-")),
@@ -74,7 +77,9 @@ async function createMicroReportHarness() {
   };
 }
 
-function submitMicroFrame(harness: Awaited<ReturnType<typeof createMicroReportHarness>>) {
+function submitMicroFrame(
+  harness: Awaited<ReturnType<typeof createMicroReportHarness>>,
+) {
   const frame = harness.body("ProblemFrame");
   frame.intentMode = "report_only";
   frame.applicableRuleRefs = [];

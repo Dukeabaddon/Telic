@@ -49,7 +49,10 @@ export function buildMicroExecutionPack(
   }
   if (contextManifestRef) requiredContextRefs.add(contextManifestRef);
 
-  const sourceRefs = [problemFrameRef, ...(contextManifestRef ? [contextManifestRef] : [])];
+  const sourceRefs = [
+    problemFrameRef,
+    ...(contextManifestRef ? [contextManifestRef] : []),
+  ];
 
   const executes =
     run.requestedMode === "fix_only" || run.requestedMode === "analyze_only";

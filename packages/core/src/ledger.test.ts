@@ -126,50 +126,49 @@ afterEach(() => {
   for (const ledger of ledgers.splice(0)) ledger.close();
 });
 
-
-  it("persists topology across applySubmission", () => {
-    const ledger = createLedger();
-    const run = {
-      ...createRun(),
-      topology: "micro" as const,
-      phase: "agent_3_review" as const,
-    };
-    const request: ArtifactSubmission = {
-      id: "request-1",
+it("persists topology across applySubmission", () => {
+  const ledger = createLedger();
+  const run = {
+    ...createRun(),
+    topology: "micro" as const,
+    phase: "agent_3_review" as const,
+  };
+  const request: ArtifactSubmission = {
+    id: "request-1",
+    runId: run.runId,
+    type: "UserMessage",
+    schemaVersion: "1.0",
+    producer: "user",
+    body: { content: "micro request" },
+  };
+  ledger.createRun(run, [request]);
+  const nextRun = {
+    ...run,
+    topology: "standard" as const,
+    phase: "agent_1_review" as const,
+    version: 2,
+    updatedAt: "2026-01-02T00:00:00.000Z",
+  };
+  ledger.applySubmission(
+    1,
+    nextRun,
+    {
+      id: "quality-review-01",
       runId: run.runId,
-      type: "UserMessage",
+      type: "QualityReview",
       schemaVersion: "1.0",
-      producer: "user",
-      body: { content: "micro request" },
-    };
-    ledger.createRun(run, [request]);
-    const nextRun = {
-      ...run,
-      topology: "standard" as const,
-      phase: "agent_1_review" as const,
-      version: 2,
-      updatedAt: "2026-01-02T00:00:00.000Z",
-    };
-    ledger.applySubmission(
-      1,
-      nextRun,
-      {
-        id: "quality-review-01",
-        runId: run.runId,
-        type: "QualityReview",
-        schemaVersion: "1.0",
-        producer: "quality_controller",
-        body: { decision: "remediate" },
-      },
-      {
-        actor: "quality_controller",
-        eventType: "phase_submitted",
-        phase: "agent_3_review",
-        decisionSummary: "MICRO_SPOT_REMEDIATE",
-      },
-    );
-    expect(ledger.requireRun(run.runId).topology).toBe("standard");
-  });
+      producer: "quality_controller",
+      body: { decision: "remediate" },
+    },
+    {
+      actor: "quality_controller",
+      eventType: "phase_submitted",
+      phase: "agent_3_review",
+      decisionSummary: "MICRO_SPOT_REMEDIATE",
+    },
+  );
+  expect(ledger.requireRun(run.runId).topology).toBe("standard");
+});
 
 describe("SQLite ledger and content-addressed artifacts", () => {
   it("round-trips an immutable artifact and verifies its digest", () => {
@@ -479,7 +478,8 @@ describe("SQLite ledger and content-addressed artifacts", () => {
         actor: "controller",
         eventType: "transition_allowed",
         phase: "context_grounding",
-        decisionSummary: "Migrated legacy row accepts escalation_count updates.",
+        decisionSummary:
+          "Migrated legacy row accepts escalation_count updates.",
       },
     );
     expect(ledger.requireRun("legacy-run").phase).toBe("agent_1_frame");

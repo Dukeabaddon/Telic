@@ -79,10 +79,17 @@ export function evaluateBrokerGate(
   const ledger = new SqliteLedger(stateDirectory);
   try {
     const run = ledger.getRun(session.runId);
-    if (!run || run.status !== "running" || run.version !== session.runVersion) {
+    if (
+      !run ||
+      run.status !== "running" ||
+      run.version !== session.runVersion
+    ) {
       return { permission: "allow" };
     }
-    const envelopeRecord = ledger.findLatestArtifact(session.runId, "RunEnvelope");
+    const envelopeRecord = ledger.findLatestArtifact(
+      session.runId,
+      "RunEnvelope",
+    );
     const envelopeBody = envelopeRecord
       ? ledger.getArtifact(session.runId, envelopeRecord.id)?.body
       : null;
@@ -93,9 +100,7 @@ export function evaluateBrokerGate(
         permissions: permissionsFromEnvelope(run.requestedMode, envelopeBody),
         ...(envelopeRecord
           ? {
-              policyRefs: [
-                `artifact://${session.runId}/${envelopeRecord.id}`,
-              ],
+              policyRefs: [`artifact://${session.runId}/${envelopeRecord.id}`],
             }
           : {}),
       },

@@ -1,4 +1,9 @@
-import type { ArtifactSubmission, Phase, RunRecord, RunTopology } from "./types.js";
+import type {
+  ArtifactSubmission,
+  Phase,
+  RunRecord,
+  RunTopology,
+} from "./types.js";
 
 export type EscalationReasonCode =
   | "MICRO_SPOT_REMEDIATE"
@@ -81,5 +86,7 @@ export function evaluateEscalation(
 export function escalationReasonForQualityReview(
   decision: string,
 ): EscalationReasonCode {
-  return decision === "remediate" ? "MICRO_SPOT_REMEDIATE" : "MICRO_SPOT_PARTIAL";
+  return decision === "remediate"
+    ? "MICRO_SPOT_REMEDIATE"
+    : "MICRO_SPOT_PARTIAL";
 }

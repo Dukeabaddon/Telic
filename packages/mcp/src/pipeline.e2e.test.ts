@@ -565,7 +565,8 @@ describe("serial Telic pipeline", () => {
     frame.intentMode = "report_only";
     frame.applicableRuleRefs = [];
     const framed = harness.submit("ProblemFrame", "scenario_author", frame);
-    const topology = harness.service.getRun(harness.started.run.runId).run.topology;
+    const topology = harness.service.getRun(harness.started.run.runId).run
+      .topology;
     if (topology === "micro") {
       expect(framed.nextAction).toMatchObject({
         kind: "phase",

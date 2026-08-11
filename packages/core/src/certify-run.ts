@@ -19,10 +19,11 @@ export interface CertifyRunResult {
   verifiedEvidenceRefs: string[];
 }
 
-const ARTIFACT_REF_PATTERN =
-  /^artifact:\/\/([^/]+)\/([A-Za-z0-9._-]+)$/u;
+const ARTIFACT_REF_PATTERN = /^artifact:\/\/([^/]+)\/([A-Za-z0-9._-]+)$/u;
 
-function parseArtifactRef(ref: string): { runId: string; artifactId: string } | null {
+function parseArtifactRef(
+  ref: string,
+): { runId: string; artifactId: string } | null {
   const match = ARTIFACT_REF_PATTERN.exec(ref);
   if (!match) return null;
   return { runId: match[1]!, artifactId: match[2]! };
@@ -87,7 +88,9 @@ function buildMatrixFromReview(
         ? (result as { criterionId: string }).criterionId
         : `AC-${String(index + 1)}`;
     const status =
-      (result as { status?: unknown }).status === "pass" ? "supported" : "unverified";
+      (result as { status?: unknown }).status === "pass"
+        ? "supported"
+        : "unverified";
     const evidenceRefs = Array.isArray(
       (result as { evidenceRefs?: unknown }).evidenceRefs,
     )

@@ -13,7 +13,8 @@ const ELEVATED_CAPABILITIES = new Set([
 
 const COMPLEXITY_PATTERN =
   /\b(refactor|migrate|architecture|security audit|across (the )?codebase|multi-?file)\b/i;
-const DIVERGENCE_PATTERN = /\b(either|or both|unclear|not sure|choose between)\b/i;
+const DIVERGENCE_PATTERN =
+  /\b(either|or both|unclear|not sure|choose between)\b/i;
 
 export interface ClassifyRunInput {
   originalRequest: string;
@@ -32,7 +33,8 @@ export interface ClassifyRunResult {
 
 function forensicSignals(input: ClassifyRunInput): string[] {
   const signals: string[] = [];
-  if (input.requestedMode === "analyze_and_fix") signals.push("ANALYZE_AND_FIX");
+  if (input.requestedMode === "analyze_and_fix")
+    signals.push("ANALYZE_AND_FIX");
   if (input.granted.some((cap) => ELEVATED_CAPABILITIES.has(cap))) {
     signals.push("ELEVATED_CAPABILITY");
   }
@@ -62,10 +64,7 @@ function passesMicroFixGate(input: ClassifyRunInput): boolean {
     return false;
   }
   for (const capability of granted) {
-    if (
-      capability !== "repository.read" &&
-      capability !== "repository.write"
-    ) {
+    if (capability !== "repository.read" && capability !== "repository.write") {
       return false;
     }
   }
@@ -87,8 +86,7 @@ export function classifyRun(input: ClassifyRunInput): ClassifyRunResult {
   const forensic = forensicSignals(input);
   if (input.topologyOverride) {
     if (input.topologyOverride === "micro") {
-      const microEligible =
-        passesMicroGate(input) || passesMicroFixGate(input);
+      const microEligible = passesMicroGate(input) || passesMicroFixGate(input);
       if (forensic.length > 0 || !microEligible) {
         throw new Error(
           "topologyOverride micro is incompatible with the current request signals",
@@ -122,10 +120,7 @@ export function classifyRun(input: ClassifyRunInput): ClassifyRunResult {
     };
   }
 
-  if (
-    input.requestedMode === "fix_only" &&
-    passesMicroFixGate(input)
-  ) {
+  if (input.requestedMode === "fix_only" && passesMicroFixGate(input)) {
     return {
       topology: "micro",
       rationaleCode: "MICRO_SHORT_FIX_ONLY",

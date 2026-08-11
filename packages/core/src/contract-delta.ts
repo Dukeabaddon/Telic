@@ -14,7 +14,9 @@ function latestBody(
   artifacts: HydratedArtifact[],
   type: string,
 ): Record<string, unknown> | null {
-  const record = [...artifacts].reverse().find((artifact) => artifact.type === type);
+  const record = [...artifacts]
+    .reverse()
+    .find((artifact) => artifact.type === type);
   if (!record || typeof record.body !== "object" || record.body === null) {
     return null;
   }

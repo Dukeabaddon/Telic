@@ -8,28 +8,19 @@
   "status": "active",
   "workingContext": {
     "repositoryRoot": "/workspace/example",
-    "activeFiles": [
-      "apps/web/src/api.ts"
-    ],
-    "applicableRuleRefs": [
-      "repo://AGENTS.md"
-    ]
+    "activeFiles": ["apps/web/src/api.ts"],
+    "applicableRuleRefs": ["repo://AGENTS.md"]
   },
   "host": {
     "name": "codex",
     "version": "0.144.2",
     "nativeSubagents": "available",
-    "capabilities": [
-      "repository.read",
-      "shell.inspect"
-    ]
+    "capabilities": ["repository.read", "shell.inspect"]
   },
   "authorization": {
     "granted": {
       "repository": {
-        "read": [
-          "**"
-        ],
+        "read": ["**"],
         "write": [],
         "delete": []
       },
@@ -38,9 +29,7 @@
         "executeAllowlist": []
       },
       "runtime": {
-        "inspect": [
-          "local"
-        ],
+        "inspect": ["local"],
         "restart": []
       },
       "browser": {
@@ -60,12 +49,8 @@
     "denied": {
       "repository": {
         "read": [],
-        "write": [
-          "**"
-        ],
-        "delete": [
-          "**"
-        ]
+        "write": ["**"],
+        "delete": ["**"]
       },
       "shell": {
         "inspect": false,
@@ -73,9 +58,7 @@
       },
       "runtime": {
         "inspect": [],
-        "restart": [
-          "*"
-        ]
+        "restart": ["*"]
       },
       "browser": {
         "inspect": false,
@@ -98,8 +81,6 @@
     "maximumParallelWorkers": 3,
     "maximumSubagentDepth": 1
   },
-  "policyRefs": [
-    "repo://AGENTS.md"
-  ],
+  "policyRefs": ["repo://AGENTS.md"],
   "topology": "standard"
 }

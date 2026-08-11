@@ -54,7 +54,7 @@ describe("bounded state machine", () => {
       run({
         phase: "agent_1_frame",
         topology: "micro",
-    escalationCount: 0,
+        escalationCount: 0,
         requestedMode: "report_only",
       }),
       artifact("ProblemFrame"),
@@ -285,21 +285,21 @@ describe("bounded state machine", () => {
     expect(() => resumeAfterClarification(run())).toThrow(/not awaiting/);
   });
 
-  it('routes forensic quality pass through evidence reverify', () => {
+  it("routes forensic quality pass through evidence reverify", () => {
     const result = advanceRun(
-      run({ topology: 'forensic', phase: 'agent_3_review' }),
-      artifact('QualityReview', { decision: 'pass' }),
+      run({ topology: "forensic", phase: "agent_3_review" }),
+      artifact("QualityReview", { decision: "pass" }),
     );
-    expect(result.run.phase).toBe('agent_3_evidence_reverify');
+    expect(result.run.phase).toBe("agent_3_evidence_reverify");
 
     const reverify = advanceRun(
       result.run,
-      artifact('QualityReview', {
-        decision: 'pass',
-        reviewKind: 'evidence_reverify',
+      artifact("QualityReview", {
+        decision: "pass",
+        reviewKind: "evidence_reverify",
       }),
     );
-    expect(reverify.run.phase).toBe('agent_5_audit');
+    expect(reverify.run.phase).toBe("agent_5_audit");
   });
 
   it("rejects artifacts from another run and submissions to stopped runs", () => {

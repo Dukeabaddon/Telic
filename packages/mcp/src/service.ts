@@ -438,7 +438,9 @@ export class TelicService {
       ...(input.topologyOverride !== undefined
         ? { topologyOverride: input.topologyOverride }
         : {}),
-      ...(input.priorRunId !== undefined ? { priorRunId: input.priorRunId } : {}),
+      ...(input.priorRunId !== undefined
+        ? { priorRunId: input.priorRunId }
+        : {}),
       host: {
         name: input.hostName ?? "mcp-host",
         nativeSubagents: input.nativeSubagents ?? "unknown",
@@ -853,7 +855,11 @@ export class TelicService {
       permissionDecision: decision.permissionDecision,
       decisionSummary: decision.allowed
         ? "Broker allowed " + input.capability + "."
-        : "Broker denied " + input.capability + ": " + decision.reasonCode + ".",
+        : "Broker denied " +
+          input.capability +
+          ": " +
+          decision.reasonCode +
+          ".",
     });
     return decision;
   }

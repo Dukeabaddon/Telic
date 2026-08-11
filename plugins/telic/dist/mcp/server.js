@@ -33085,7 +33085,10 @@ function buildMicroExecutionPack(run, problemFrame, contextManifestRef, original
   }
   if (contextManifestRef)
     requiredContextRefs.add(contextManifestRef);
-  const sourceRefs = [problemFrameRef, ...contextManifestRef ? [contextManifestRef] : []];
+  const sourceRefs = [
+    problemFrameRef,
+    ...contextManifestRef ? [contextManifestRef] : []
+  ];
   const executes = run.requestedMode === "fix_only" || run.requestedMode === "analyze_only";
   const contractBody = {
     schemaVersion: "1.0",
@@ -39071,13 +39074,7 @@ function registerTools(server, service) {
         openWorldHint: false
       }
     },
-    async ({
-      run_id,
-      action_id,
-      expected_run_version,
-      capability: capability2,
-      target
-    }) => {
+    async ({ run_id, action_id, expected_run_version, capability: capability2, target }) => {
       try {
         const decision = service.checkToolAction({
           runId: run_id,

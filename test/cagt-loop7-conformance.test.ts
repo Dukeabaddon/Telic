@@ -36,7 +36,10 @@ describe("CAGT loop 7 conformance", () => {
   it("preserves lineage_linked in MCP trace export", () => {
     const repositoryRoot = mkdtempSync(join(tmpdir(), "telic-cagt-loop7-"));
     mkdirSync(join(repositoryRoot, "src"), { recursive: true });
-    writeFileSync(join(repositoryRoot, "src", "index.ts"), "export const x = 1;\n");
+    writeFileSync(
+      join(repositoryRoot, "src", "index.ts"),
+      "export const x = 1;\n",
+    );
     const service = new TelicService({
       repositoryRoot,
       stateDirectory: mkdtempSync(join(tmpdir(), "telic-cagt-loop7-state-")),
@@ -60,9 +63,9 @@ describe("CAGT loop 7 conformance", () => {
     expect(linked.run.priorRunId).toBe(prior.run.runId);
 
     const mcpTrace = service.getTrace(linked.run.runId);
-    expect(
-      mcpTrace.some((event) => event.eventType === "lineage_linked"),
-    ).toBe(true);
+    expect(mcpTrace.some((event) => event.eventType === "lineage_linked")).toBe(
+      true,
+    );
   });
 
   it("returns digest-only forensic replay steps without artifact bodies", () => {

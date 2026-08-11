@@ -28,10 +28,7 @@ import {
   validateCrossRunEvidenceRef,
 } from "./evidence-oracle.js";
 import { buildMicroExecutionPack } from "./micro-bootstrap.js";
-import {
-  instructionRefFor,
-  isMicroBootstrapTransition,
-} from "./topology.js";
+import { instructionRefFor, isMicroBootstrapTransition } from "./topology.js";
 import {
   advanceRun,
   requiredArtifactTypes,
@@ -1012,8 +1009,9 @@ export class RunController {
       const priorArtifacts = this.ledger
         .listArtifacts(run.priorRunId)
         .map((record) => this.ledger.getArtifact(run.priorRunId!, record.id))
-        .filter((artifact): artifact is NonNullable<typeof artifact> =>
-          artifact !== null,
+        .filter(
+          (artifact): artifact is NonNullable<typeof artifact> =>
+            artifact !== null,
         );
       buildContractDelta(prior, priorArtifacts);
     }
@@ -1394,17 +1392,21 @@ export class RunController {
         preEscalation.phase,
         preEscalation.reason,
       );
-      this.ledger.transitionWithoutArtifact(current.version, {
-        ...escalated.run,
-        version: current.version + 1,
-        updatedAt: now,
-      }, {
-        actor: "controller",
-        eventType: "topology_escalated",
-        phase: current.phase,
-        decisionSummary: preEscalation.reason,
-        inputRefs: [`artifact://${submission.runId}/${submission.id}`],
-      });
+      this.ledger.transitionWithoutArtifact(
+        current.version,
+        {
+          ...escalated.run,
+          version: current.version + 1,
+          updatedAt: now,
+        },
+        {
+          actor: "controller",
+          eventType: "topology_escalated",
+          phase: current.phase,
+          decisionSummary: preEscalation.reason,
+          inputRefs: [`artifact://${submission.runId}/${submission.id}`],
+        },
+      );
       throw new Error(
         `Topology escalated to ${preEscalation.targetTopology} (${preEscalation.reason})`,
       );
@@ -1835,7 +1837,9 @@ export class RunController {
         const draftCriteria = Array.isArray(body.draftAcceptanceCriteria)
           ? body.draftAcceptanceCriteria
           : [];
-        const knownFacts = Array.isArray(body.knownFacts) ? body.knownFacts : [];
+        const knownFacts = Array.isArray(body.knownFacts)
+          ? body.knownFacts
+          : [];
         if (draftCriteria.length !== 1) {
           throw new Error(
             "Micro topology requires exactly one draft acceptance criterion",

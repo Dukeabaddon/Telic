@@ -78,7 +78,10 @@ export function instructionRefFor(run: RunRecord): string {
   if (run.topology === "micro" && run.phase === "agent_3_review") {
     return "artifact://system/roles/quality_controller-spot-v1";
   }
-  if (run.topology === "forensic" && run.phase === "agent_3_evidence_reverify") {
+  if (
+    run.topology === "forensic" &&
+    run.phase === "agent_3_evidence_reverify"
+  ) {
     return "artifact://system/roles/quality_controller-reverify-v1";
   }
   return `artifact://system/roles/${roleByPhase[run.phase]}-v1`;
@@ -94,4 +97,3 @@ export function isMicroBootstrapTransition(
     (next.phase === "agent_4_execute" || next.phase === "agent_3_review")
   );
 }
-

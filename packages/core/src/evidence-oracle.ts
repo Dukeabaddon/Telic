@@ -1,10 +1,11 @@
 import type { SqliteLedger } from "./ledger.js";
 import type { RunRecord } from "./types.js";
 
-const ARTIFACT_REF_PATTERN =
-  /^artifact:\/\/([^/]+)\/([A-Za-z0-9._-]+)$/u;
+const ARTIFACT_REF_PATTERN = /^artifact:\/\/([^/]+)\/([A-Za-z0-9._-]+)$/u;
 
-function parseArtifactRef(ref: string): { runId: string; artifactId: string } | null {
+function parseArtifactRef(
+  ref: string,
+): { runId: string; artifactId: string } | null {
   const match = ARTIFACT_REF_PATTERN.exec(ref);
   if (!match) return null;
   return { runId: match[1]!, artifactId: match[2]! };
@@ -39,7 +40,9 @@ export function validateCrossRunEvidenceRef(
     throw new Error(`Cross-run evidence artifact does not exist: ${ref}`);
   }
   if (artifact.type !== "Evidence") {
-    throw new Error(`Cross-run evidence ref must target an Evidence artifact: ${ref}`);
+    throw new Error(
+      `Cross-run evidence ref must target an Evidence artifact: ${ref}`,
+    );
   }
 }
 

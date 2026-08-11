@@ -1,4 +1,9 @@
-import type { ArtifactSubmission, Phase, RunRecord, RunTopology } from "./types.js";
+import type {
+  ArtifactSubmission,
+  Phase,
+  RunRecord,
+  RunTopology,
+} from "./types.js";
 
 export class TransitionError extends Error {
   constructor(message: string) {
@@ -218,10 +223,7 @@ export function advanceRun(
           return {
             run: {
               ...move(run, "agent_5_report"),
-              outcomeHint:
-                decision === "pass"
-                  ? run.outcomeHint
-                  : "blocked",
+              outcomeHint: decision === "pass" ? run.outcomeHint : "blocked",
             },
             summary: `Micro spot-check recorded ${decision}; final report is next.`,
             budgetConsumed: null,
@@ -316,7 +318,8 @@ export function advanceRun(
         typeof artifact.body === "object" &&
         artifact.body !== null &&
         "reviewKind" in artifact.body &&
-        typeof (artifact.body as { reviewKind?: unknown }).reviewKind === "string"
+        typeof (artifact.body as { reviewKind?: unknown }).reviewKind ===
+          "string"
           ? (artifact.body as { reviewKind: string }).reviewKind
           : "spot";
       if (reviewKind !== "evidence_reverify") {
@@ -324,7 +327,11 @@ export function advanceRun(
           "Forensic evidence reverify requires reviewKind evidence_reverify",
         );
       }
-      if (decision === "pass" || decision === "partial" || decision === "block") {
+      if (
+        decision === "pass" ||
+        decision === "partial" ||
+        decision === "block"
+      ) {
         return {
           run: {
             ...move(run, "agent_5_audit"),

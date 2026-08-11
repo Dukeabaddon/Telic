@@ -5,7 +5,10 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { TelicService } from "../packages/mcp/src/service.js";
-import { VALID_ARTIFACT_BODIES, HASH } from "../packages/protocol/test/test-helpers.js";
+import {
+  VALID_ARTIFACT_BODIES,
+  HASH,
+} from "../packages/protocol/test/test-helpers.js";
 
 type Scorecard = {
   topology: string;
@@ -37,10 +40,15 @@ describe("CAGT benchmark scorecards", () => {
     const scorecard = loadScorecard("micro-report-only");
     const repositoryRoot = mkdtempSync(join(tmpdir(), "telic-cagt-benchmark-"));
     mkdirSync(join(repositoryRoot, "src"), { recursive: true });
-    writeFileSync(join(repositoryRoot, "src", "index.ts"), "export const x = 1;\n");
+    writeFileSync(
+      join(repositoryRoot, "src", "index.ts"),
+      "export const x = 1;\n",
+    );
     const service = new TelicService({
       repositoryRoot,
-      stateDirectory: mkdtempSync(join(tmpdir(), "telic-cagt-benchmark-state-")),
+      stateDirectory: mkdtempSync(
+        join(tmpdir(), "telic-cagt-benchmark-state-"),
+      ),
     });
     services.push(service);
 
@@ -160,12 +168,19 @@ describe("CAGT benchmark scorecards", () => {
 
   it("micro fix_only matches the scorecard", async () => {
     const scorecard = loadScorecard("micro-fix-only");
-    const repositoryRoot = mkdtempSync(join(tmpdir(), "telic-cagt-benchmark-fix-"));
+    const repositoryRoot = mkdtempSync(
+      join(tmpdir(), "telic-cagt-benchmark-fix-"),
+    );
     mkdirSync(join(repositoryRoot, "src"), { recursive: true });
-    writeFileSync(join(repositoryRoot, "src", "foo.ts"), "export const bar = 1;\n");
+    writeFileSync(
+      join(repositoryRoot, "src", "foo.ts"),
+      "export const bar = 1;\n",
+    );
     const service = new TelicService({
       repositoryRoot,
-      stateDirectory: mkdtempSync(join(tmpdir(), "telic-cagt-benchmark-fix-state-")),
+      stateDirectory: mkdtempSync(
+        join(tmpdir(), "telic-cagt-benchmark-fix-state-"),
+      ),
     });
     services.push(service);
 
@@ -351,13 +366,15 @@ describe("CAGT benchmark scorecards", () => {
   });
 });
 
-
 describe("CAGT benchmark topology scorecards", () => {
   it("standard report_only selects the standard topology", () => {
     const scorecard = loadScorecard("standard-report-only");
     const repositoryRoot = mkdtempSync(join(tmpdir(), "telic-cagt-standard-"));
     mkdirSync(join(repositoryRoot, "src"), { recursive: true });
-    writeFileSync(join(repositoryRoot, "src", "index.ts"), "export const x = 1;\n");
+    writeFileSync(
+      join(repositoryRoot, "src", "index.ts"),
+      "export const x = 1;\n",
+    );
     const service = new TelicService({
       repositoryRoot,
       stateDirectory: mkdtempSync(join(tmpdir(), "telic-cagt-standard-state-")),
@@ -380,7 +397,10 @@ describe("CAGT benchmark topology scorecards", () => {
     const scorecard = loadScorecard("forensic-analyze-fix");
     const repositoryRoot = mkdtempSync(join(tmpdir(), "telic-cagt-forensic-"));
     mkdirSync(join(repositoryRoot, "src"), { recursive: true });
-    writeFileSync(join(repositoryRoot, "src", "index.ts"), "export const x = 1;\n");
+    writeFileSync(
+      join(repositoryRoot, "src", "index.ts"),
+      "export const x = 1;\n",
+    );
     const service = new TelicService({
       repositoryRoot,
       stateDirectory: mkdtempSync(join(tmpdir(), "telic-cagt-forensic-state-")),

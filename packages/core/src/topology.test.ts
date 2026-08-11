@@ -18,9 +18,11 @@ describe("topology phases", () => {
       forensic.indexOf("agent_3_review"),
     );
     expect(forensic.includes("agent_3_evidence_reverify")).toBe(true);
-    expect(standard.includes("agent_3_evidence_reverify" as (typeof standard)[number])).toBe(
-      false,
-    );
+    expect(
+      standard.includes(
+        "agent_3_evidence_reverify" as (typeof standard)[number],
+      ),
+    ).toBe(false);
     expect(
       (MICRO_PHASES as readonly string[]).includes("agent_3_evidence_reverify"),
     ).toBe(false);

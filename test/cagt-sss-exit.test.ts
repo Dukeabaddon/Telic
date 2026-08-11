@@ -46,10 +46,7 @@ describe("CAGT SSS exit predicate", () => {
   });
 
   it("includes micro benchmark scorecard fixtures", () => {
-    const fixtureDir = join(
-      repositoryRoot,
-      "test/fixtures/cagt-benchmark",
-    );
+    const fixtureDir = join(repositoryRoot, "test/fixtures/cagt-benchmark");
     for (const name of [
       "micro-report-only",
       "micro-fix-only",
@@ -143,9 +140,9 @@ describe("CAGT SSS exit predicate", () => {
     expect(
       existsSync(join(repositoryRoot, "test/cagt-broker-hook-e2e.test.ts")),
     ).toBe(true);
-    expect(existsSync(join(repositoryRoot, "test/cagt-replay-cli.test.ts"))).toBe(
-      true,
-    );
+    expect(
+      existsSync(join(repositoryRoot, "test/cagt-replay-cli.test.ts")),
+    ).toBe(true);
     const cliSource = readFileSync(
       join(repositoryRoot, "packages/cli/src/index.ts"),
       "utf8",
@@ -162,7 +159,10 @@ describe("CAGT SSS exit predicate", () => {
     ).toBe(true);
     expect(
       existsSync(
-        join(repositoryRoot, "adapters/cline/project/.cline/hooks/broker-gate.mjs"),
+        join(
+          repositoryRoot,
+          "adapters/cline/project/.cline/hooks/broker-gate.mjs",
+        ),
       ),
     ).toBe(true);
   });

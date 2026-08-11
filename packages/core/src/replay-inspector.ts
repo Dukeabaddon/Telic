@@ -46,7 +46,9 @@ function verifyArtifactDigest(
   }
 }
 
-function parseArtifactRef(reference: string): { runId: string; artifactId: string } | null {
+function parseArtifactRef(
+  reference: string,
+): { runId: string; artifactId: string } | null {
   const match = ARTIFACT_REF_PATTERN.exec(reference);
   if (!match) return null;
   return { runId: match[1]!, artifactId: match[2]! };
@@ -73,10 +75,7 @@ function brokerDenyHighlights(ledger: SqliteLedger, runId: string): string[] {
 function artifactTraceIndex(
   ledger: SqliteLedger,
   runId: string,
-): Map<
-  string,
-  { sequence: number; phase: Phase; escalationReason?: string }
-> {
+): Map<string, { sequence: number; phase: Phase; escalationReason?: string }> {
   const escalationBySequence = new Map<number, string>();
   for (const event of ledger.listTrace(runId)) {
     if (event.eventType === "topology_escalated") {
@@ -104,7 +103,10 @@ function artifactTraceIndex(
   return index;
 }
 
-export function inspectRunReplay(ledger: SqliteLedger, run: RunRecord): ReplayReport {
+export function inspectRunReplay(
+  ledger: SqliteLedger,
+  run: RunRecord,
+): ReplayReport {
   if (run.topology === "micro") {
     return {
       runId: run.runId,
@@ -117,20 +119,22 @@ export function inspectRunReplay(ledger: SqliteLedger, run: RunRecord): ReplayRe
   }
 
   const traceIndex = artifactTraceIndex(ledger, run.runId);
-  const steps: ReplayStep[] = ledger.listArtifacts(run.runId).map((stored, index) => {
-    const artifactRef = `artifact://${run.runId}/${stored.id}`;
-    const traced = traceIndex.get(stored.id);
-    return {
-      sequence: traced?.sequence ?? index,
-      phase: traced?.phase ?? run.phase,
-      artifactRef,
-      artifactType: stored.type,
-      digestStatus: verifyArtifactDigest(ledger, run.runId, stored.id),
-      ...(traced?.escalationReason
-        ? { escalationReason: traced.escalationReason }
-        : {}),
-    };
-  });
+  const steps: ReplayStep[] = ledger
+    .listArtifacts(run.runId)
+    .map((stored, index) => {
+      const artifactRef = `artifact://${run.runId}/${stored.id}`;
+      const traced = traceIndex.get(stored.id);
+      return {
+        sequence: traced?.sequence ?? index,
+        phase: traced?.phase ?? run.phase,
+        artifactRef,
+        artifactType: stored.type,
+        digestStatus: verifyArtifactDigest(ledger, run.runId, stored.id),
+        ...(traced?.escalationReason
+          ? { escalationReason: traced.escalationReason }
+          : {}),
+      };
+    });
 
   steps.sort((left, right) => left.sequence - right.sequence);
 

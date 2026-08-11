@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import { advanceRun } from "../packages/core/src/state-machine.js";
-import type { ArtifactSubmission, RunRecord } from "../packages/core/src/types.js";
+import type {
+  ArtifactSubmission,
+  RunRecord,
+} from "../packages/core/src/types.js";
 
-function forensicRun(
-  overrides: Partial<RunRecord> = {},
-): RunRecord {
+function forensicRun(overrides: Partial<RunRecord> = {}): RunRecord {
   const now = "2026-07-15T10:00:00Z";
   return {
     runId: "00000000-0000-4000-8000-000000000001",

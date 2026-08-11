@@ -5,7 +5,10 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { TelicService } from "../packages/mcp/src/service.js";
-import { VALID_ARTIFACT_BODIES, HASH } from "../packages/protocol/test/test-helpers.js";
+import {
+  VALID_ARTIFACT_BODIES,
+  HASH,
+} from "../packages/protocol/test/test-helpers.js";
 
 type ArtifactBody = Record<string, unknown>;
 const services: TelicService[] = [];
@@ -22,7 +25,10 @@ function bindTemplate(
 async function createMicroFixHarness() {
   const repositoryRoot = mkdtempSync(join(tmpdir(), "telic-cagt-loop2-"));
   mkdirSync(join(repositoryRoot, "src"), { recursive: true });
-  writeFileSync(join(repositoryRoot, "src", "foo.ts"), "export const bar = 1;\n");
+  writeFileSync(
+    join(repositoryRoot, "src", "foo.ts"),
+    "export const bar = 1;\n",
+  );
   const service = new TelicService({
     repositoryRoot,
     stateDirectory: mkdtempSync(join(tmpdir(), "telic-cagt-loop2-state-")),

@@ -5,7 +5,10 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { TelicService } from "../packages/mcp/src/service.js";
-import { VALID_ARTIFACT_BODIES, HASH } from "../packages/protocol/test/test-helpers.js";
+import {
+  VALID_ARTIFACT_BODIES,
+  HASH,
+} from "../packages/protocol/test/test-helpers.js";
 
 type ArtifactBody = Record<string, unknown>;
 const services: TelicService[] = [];
@@ -27,7 +30,10 @@ describe("CAGT loop 3 conformance", () => {
   it("emits ReceiptAudit and digest_verified on micro QualityReview pass", async () => {
     const repositoryRoot = mkdtempSync(join(tmpdir(), "telic-cagt-loop3-"));
     mkdirSync(join(repositoryRoot, "src"), { recursive: true });
-    writeFileSync(join(repositoryRoot, "src", "foo.ts"), "export const bar = 1;\n");
+    writeFileSync(
+      join(repositoryRoot, "src", "foo.ts"),
+      "export const bar = 1;\n",
+    );
     const service = new TelicService({
       repositoryRoot,
       stateDirectory: mkdtempSync(join(tmpdir(), "telic-cagt-loop3-state-")),
@@ -174,17 +180,20 @@ describe("CAGT loop 3 conformance", () => {
     submit("QualityReview", "quality_controller", review);
 
     const artifacts = service.getRun(started.run.runId).artifacts;
-    const receipt = artifacts.find((artifact) => artifact.type === "ReceiptAudit");
+    const receipt = artifacts.find(
+      (artifact) => artifact.type === "ReceiptAudit",
+    );
     expect(receipt).toBeDefined();
-    const receiptBody = service.getArtifact(started.run.runId, receipt!.id).body as {
+    const receiptBody = service.getArtifact(started.run.runId, receipt!.id)
+      .body as {
       digestStatus?: string;
     };
     expect(receiptBody.digestStatus).toBe("verified");
 
     const ledgerTrace = service.ledger.listTrace(started.run.runId);
-    expect(ledgerTrace.some((event) => event.eventType === "digest_verified")).toBe(
-      true,
-    );
+    expect(
+      ledgerTrace.some((event) => event.eventType === "digest_verified"),
+    ).toBe(true);
 
     const mcpTrace = service.getTrace(started.run.runId);
     expect(

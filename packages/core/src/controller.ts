@@ -14,6 +14,24 @@ import {
   shellInspectionTargetIsSafe,
   type ActionKind,
 } from "./permissions.js";
+import { classifyRun } from "./classify-run.js";
+import {
+  MAX_ESCALATIONS_PER_RUN,
+  evaluateEscalation,
+  escalateTopology,
+  escalationReasonForQualityReview,
+} from "./escalation.js";
+import { certifyRun, digestSummaryForRefs } from "./certify-run.js";
+import { buildContractDelta } from "./contract-delta.js";
+import {
+  collectCrossRunEvidenceRefs,
+  validateCrossRunEvidenceRef,
+} from "./evidence-oracle.js";
+import { buildMicroExecutionPack } from "./micro-bootstrap.js";
+import {
+  instructionRefFor,
+  isMicroBootstrapTransition,
+} from "./topology.js";
 import {
   advanceRun,
   requiredArtifactTypes,
@@ -91,6 +109,16 @@ const artifactInputsByPhase: Record<RunRecord["phase"], Set<string>> = {
     "UserMessage",
     "ClarificationRequest",
   ]),
+  agent_3_evidence_reverify: new Set([
+    "TaskContract",
+    "WorkPlan",
+    "WorkResult",
+    "Evidence",
+    "QualityReview",
+    "ReleaseAudit",
+    "UserMessage",
+    "ClarificationRequest",
+  ]),
   agent_5_audit: new Set([
     "UserMessage",
     "TaskContract",
@@ -123,6 +151,7 @@ const protocolPhaseByInternal: Record<RunRecord["phase"], string> = {
   agent_3_plan: "agent_3_plan",
   agent_4_execute: "agent_4_execute",
   agent_3_review: "agent_3_quality_review",
+  agent_3_evidence_reverify: "agent_3_evidence_reverify",
   agent_5_audit: "agent_5_release_audit",
   agent_5_report: "user_report",
 };
@@ -292,6 +321,7 @@ const roleByPhase: Record<RunRecord["phase"], PhaseNextAction["logicalRole"]> =
     agent_3_plan: "quality_controller",
     agent_4_execute: "executor",
     agent_3_review: "quality_controller",
+    agent_3_evidence_reverify: "quality_controller",
     agent_5_audit: "release_auditor",
     agent_5_report: "release_auditor",
   };
@@ -315,6 +345,8 @@ export interface StartRunInput {
     promptRevisions?: 0 | 1;
     postExecutionRemediations?: 0 | 1;
   };
+  topologyOverride?: import("./types.js").RunTopology | null;
+  priorRunId?: string | null;
 }
 
 function assertStartInput(input: StartRunInput): void {
@@ -489,6 +521,7 @@ const fixedProducerByType: Readonly<Record<string, string>> = {
   PromptReview: "scenario_author",
   QualityReview: "quality_controller",
   ReleaseAudit: "release_auditor",
+  ReceiptAudit: "controller",
   RunEnvelope: "controller",
   ScenarioSpec: "scenario_author",
   TaskContract: "task_compiler",
@@ -729,7 +762,7 @@ const systemReferenceFields = new Set([
 ]);
 
 const knownSystemReferencePatterns = [
-  /^artifact:\/\/system\/roles\/(?:controller|scenario[_-]author|task[_-]compiler|quality[_-]controller|executor|release[_-]auditor)-v1$/u,
+  /^artifact:\/\/system\/roles\/(?:controller|scenario[_-]author(?:-micro)?|task[_-]compiler|quality[_-]controller(?:-spot)?|executor|release[_-]auditor)-v1$/u,
   /^artifact:\/\/system\/rubrics\/contract-readiness-v1$/u,
 ];
 
@@ -844,6 +877,18 @@ export class RunController {
 
   startRun(input: StartRunInput): { run: RunRecord; nextAction: NextAction } {
     assertStartInput(input);
+    const classification = classifyRun({
+      originalRequest: input.originalRequest,
+      requestedMode: input.requestedMode,
+      granted: input.authorization.granted,
+      ...(input.authorization.shellExecuteAllowlist !== undefined
+        ? { shellExecuteAllowlist: input.authorization.shellExecuteAllowlist }
+        : {}),
+      ...(input.authorization.networkReadDomains !== undefined
+        ? { networkReadDomains: input.authorization.networkReadDomains }
+        : {}),
+      topologyOverride: input.topologyOverride ?? null,
+    });
     const now = new Date().toISOString();
     const runId = randomUUID();
     const repositoryRoot = realpathSync(input.repositoryRoot);
@@ -863,6 +908,9 @@ export class RunController {
       schemaVersion: "1.0",
       repositoryRoot,
       requestedMode: input.requestedMode,
+      topology: classification.topology,
+      escalationCount: 0,
+      priorRunId: input.priorRunId ?? null,
       status: "running",
       phase: "context_grounding",
       resumePhase: null,
@@ -884,6 +932,7 @@ export class RunController {
       originalRequestRef: requestRef,
       followupRequestRefs: [],
       requestedMode: input.requestedMode,
+      topology: classification.topology,
       status: "active",
       workingContext: {
         repositoryRoot,
@@ -944,7 +993,46 @@ export class RunController {
         body: envelopeBody,
       },
     ];
+    if (run.priorRunId) {
+      const prior = this.ledger.getRun(run.priorRunId);
+      if (!prior) {
+        throw new Error(`Prior run ${run.priorRunId} does not exist`);
+      }
+      if (prior.repositoryRoot !== repositoryRoot) {
+        throw new Error("Prior run repository root mismatch");
+      }
+      if (
+        prior.status !== "completed" &&
+        prior.status !== "partial" &&
+        prior.status !== "blocked" &&
+        prior.status !== "cancelled"
+      ) {
+        throw new Error("Prior run must be terminal before lineage link");
+      }
+      const priorArtifacts = this.ledger
+        .listArtifacts(run.priorRunId)
+        .map((record) => this.ledger.getArtifact(run.priorRunId!, record.id))
+        .filter((artifact): artifact is NonNullable<typeof artifact> =>
+          artifact !== null,
+        );
+      buildContractDelta(prior, priorArtifacts);
+    }
     this.ledger.createRun(run, artifacts);
+    this.ledger.appendTraceEvent(runId, {
+      actor: "controller",
+      eventType: "topology_classified",
+      phase: run.phase,
+      decisionSummary: classification.rationaleCode,
+    });
+    if (run.priorRunId) {
+      this.ledger.appendTraceEvent(runId, {
+        actor: "controller",
+        eventType: "lineage_linked",
+        phase: run.phase,
+        decisionSummary: `Linked to prior run ${run.priorRunId}`,
+        inputRefs: [`run://${run.priorRunId}`],
+      });
+    }
     return { run, nextAction: this.getNextAction(runId) };
   }
 
@@ -1159,11 +1247,11 @@ export class RunController {
       id: `action:${runId}:${run.version}`,
       runId,
       createdAt: run.updatedAt,
-      rationaleSummary: `Controller selected ${protocolPhaseByInternal[run.phase]} from immutable run state.`,
+      rationaleSummary: `Controller selected ${protocolPhaseByInternal[run.phase]} for ${run.topology} topology from immutable run state.`,
       kind: "phase",
       phase: protocolPhaseByInternal[run.phase],
       logicalRole: roleByPhase[run.phase],
-      instructionRef: `artifact://system/roles/${roleByPhase[run.phase]}-v1`,
+      instructionRef: instructionRefFor(run),
       inputRefs: inputArtifacts.map(
         (artifact) => `artifact://${runId}/${artifact.id}`,
       ),
@@ -1294,6 +1382,33 @@ export class RunController {
       );
     }
     this.assertArtifactReferences(normalized);
+    const preEscalation = evaluateEscalation(current, normalized);
+    if (
+      preEscalation &&
+      (submission.type === "UserReport" || submission.type === "ReleaseAudit")
+    ) {
+      const now = new Date().toISOString();
+      const escalated = escalateTopology(
+        current,
+        preEscalation.targetTopology,
+        preEscalation.phase,
+        preEscalation.reason,
+      );
+      this.ledger.transitionWithoutArtifact(current.version, {
+        ...escalated.run,
+        version: current.version + 1,
+        updatedAt: now,
+      }, {
+        actor: "controller",
+        eventType: "topology_escalated",
+        phase: current.phase,
+        decisionSummary: preEscalation.reason,
+        inputRefs: [`artifact://${submission.runId}/${submission.id}`],
+      });
+      throw new Error(
+        `Topology escalated to ${preEscalation.targetTopology} (${preEscalation.reason})`,
+      );
+    }
     try {
       this.assertCrossArtifactInvariants(current, normalized);
     } catch (error) {
@@ -1335,11 +1450,44 @@ export class RunController {
             : {}),
         });
     const now = new Date().toISOString();
-    const nextRun: RunRecord = {
+    let nextRun: RunRecord = {
       ...transition.run,
       version: current.version + 1,
       updatedAt: now,
     };
+    if (nextRun.topology !== current.topology) {
+      if (current.escalationCount >= MAX_ESCALATIONS_PER_RUN) {
+        throw new Error("escalation budget exhausted");
+      }
+      nextRun = {
+        ...nextRun,
+        escalationCount: current.escalationCount + 1,
+      };
+    }
+    let companionArtifacts: ArtifactSubmission[] = [];
+    if (
+      submission.type === "ProblemFrame" &&
+      isMicroBootstrapTransition(current, nextRun)
+    ) {
+      const contextRecord = this.ledger.findLatestArtifact(
+        submission.runId,
+        "ContextManifest",
+      );
+      const contextRef = contextRecord
+        ? `artifact://${submission.runId}/${contextRecord.id}`
+        : null;
+      const envelope = this.latestBody(submission.runId, "RunEnvelope")!;
+      companionArtifacts = buildMicroExecutionPack(
+        nextRun,
+        body as unknown as Parameters<typeof buildMicroExecutionPack>[1],
+        contextRef,
+        String(envelope.originalRequestRef),
+        envelope as unknown as Parameters<typeof buildMicroExecutionPack>[4],
+      ).map((artifact) => ({
+        ...artifact,
+        body: this.validateArtifact(artifact.type, artifact.body),
+      }));
+    }
     const event = {
       actor: submission.producer,
       eventType: clarificationBudgetExhausted
@@ -1354,12 +1502,63 @@ export class RunController {
     const primaryEvent = permissionEvents[0] ?? event;
     const additionalEvents =
       permissionEvents.length > 0 ? [...permissionEvents.slice(1), event] : [];
+    if (
+      current.topology === "micro" &&
+      submission.type === "QualityReview" &&
+      body.decision === "pass"
+    ) {
+      const cert = certifyRun(this.ledger, submission.runId, body);
+      const receiptId = "receipt-01";
+      companionArtifacts.push({
+        id: receiptId,
+        runId: submission.runId,
+        type: "ReceiptAudit",
+        schemaVersion: "1.0",
+        producer: "controller",
+        sourceRefs: [`artifact://${submission.runId}/${submission.id}`],
+        body: this.validateArtifact("ReceiptAudit", {
+          schemaVersion: "1.0",
+          id: receiptId,
+          runId: submission.runId,
+          controllingReviewRef: `artifact://${submission.runId}/${submission.id}`,
+          claimEvidenceMatrix: cert.claimEvidenceMatrix,
+          digestStatus: cert.digestStatus,
+          verifiedAt: now,
+        }),
+      });
+      if (cert.digestStatus === "verified") {
+        additionalEvents.push({
+          actor: "controller",
+          eventType: "digest_verified",
+          phase: current.phase,
+          decisionSummary: digestSummaryForRefs(cert.verifiedEvidenceRefs),
+          inputRefs: cert.verifiedEvidenceRefs,
+        });
+      }
+    }
+    if (
+      current.topology === "micro" &&
+      nextRun.topology === "standard" &&
+      submission.type === "QualityReview"
+    ) {
+      const bodyDecision =
+        typeof body.decision === "string" ? body.decision : "";
+      const reason = escalationReasonForQualityReview(bodyDecision);
+      additionalEvents.push({
+        actor: "controller",
+        eventType: "topology_escalated",
+        phase: current.phase,
+        decisionSummary: reason,
+        inputRefs: [`artifact://${submission.runId}/${submission.id}`],
+      });
+    }
     this.ledger.applySubmission(
       current.version,
       nextRun,
       normalized,
       primaryEvent,
       additionalEvents,
+      companionArtifacts,
     );
     return {
       run: nextRun,
@@ -1631,6 +1830,29 @@ export class RunController {
     }
 
     if (submission.type === "ProblemFrame") {
+      if (run.topology === "micro") {
+        const draftCriteria = Array.isArray(body.draftAcceptanceCriteria)
+          ? body.draftAcceptanceCriteria
+          : [];
+        const knownFacts = Array.isArray(body.knownFacts) ? body.knownFacts : [];
+        if (draftCriteria.length !== 1) {
+          throw new Error(
+            "Micro topology requires exactly one draft acceptance criterion",
+          );
+        }
+        if (knownFacts.length > 3) {
+          throw new Error("Micro topology allows at most three known facts");
+        }
+        if (
+          typeof body.clarification === "object" &&
+          body.clarification !== null &&
+          (body.clarification as { required?: unknown }).required === true
+        ) {
+          throw new Error(
+            "Micro topology cannot require clarification in ProblemFrame",
+          );
+        }
+      }
       if (body.intentMode !== run.requestedMode) {
         throw new Error(
           "ProblemFrame intentMode must match the immutable run mode",
@@ -3430,6 +3652,46 @@ export class RunController {
       }
       const audit = this.latestBody(run.runId, "ReleaseAudit", false);
       if (!audit) {
+        if (run.topology === "micro") {
+          const qualityRef = this.latestRef(run.runId, "QualityReview");
+          const receipt = this.latestBody(run.runId, "ReceiptAudit", false);
+          if (
+            body.terminalStatus === "completed" &&
+            (!Array.isArray(body.completionClaims) ||
+              body.completionClaims.length === 0)
+          ) {
+            throw new Error(
+              "Completed micro UserReport requires at least one completion claim",
+            );
+          }
+          if (body.terminalStatus === "completed") {
+            if (!receipt) {
+              throw new Error(
+                "Completed micro UserReport requires a ReceiptAudit companion",
+              );
+            }
+            if (receipt.digestStatus !== "verified") {
+              throw new Error(
+                "Completed micro UserReport requires a verified ReceiptAudit",
+              );
+            }
+            if (receipt.controllingReviewRef !== qualityRef) {
+              throw new Error(
+                "ReceiptAudit must cite the controlling QualityReview",
+              );
+            }
+          }
+          if (
+            body.terminalStatus !== "completed" &&
+            !stringArray(body.findingRefs).includes(qualityRef)
+          ) {
+            throw new Error(
+              "Micro UserReport must cite the controlling QualityReview",
+            );
+          }
+          this.assertEvidenceSemantics(submission);
+          return;
+        }
         const promptReviewRecord = this.ledger.findLatestArtifact(
           run.runId,
           "PromptReview",
@@ -3672,6 +3934,16 @@ export class RunController {
   private assertEvidenceSemantics(
     submission: ArtifactSubmission & { body: Record<string, unknown> },
   ): void {
+    const run = this.ledger.requireRun(submission.runId);
+    for (const ref of collectCrossRunEvidenceRefs(submission.body)) {
+      const crossRunMatch = /^artifact:\/\/([^/]+)\//u.exec(ref);
+      if (!crossRunMatch || crossRunMatch[1] === submission.runId) {
+        continue;
+      }
+      if (run.priorRunId) {
+        validateCrossRunEvidenceRef(this.ledger, run, ref, run.priorRunId);
+      }
+    }
     for (const reference of collectArtifactReferences(submission.body)) {
       if (
         !reference.ref.startsWith("artifact://") ||
@@ -3909,6 +4181,18 @@ export class RunController {
         throw new Error(`Invalid artifact reference at ${reference.path}`);
       const [, referencedRunId, artifactId] = match;
       if (referencedRunId !== submission.runId) {
+        if (
+          evidenceRun.priorRunId &&
+          referencedRunId === evidenceRun.priorRunId
+        ) {
+          validateCrossRunEvidenceRef(
+            this.ledger,
+            evidenceRun,
+            reference.ref,
+            evidenceRun.priorRunId,
+          );
+          continue;
+        }
         throw new Error(
           `Cross-run artifact reference denied at ${reference.path}`,
         );

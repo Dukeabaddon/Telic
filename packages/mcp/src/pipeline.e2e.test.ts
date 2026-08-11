@@ -564,7 +564,16 @@ describe("serial Telic pipeline", () => {
     const frame = harness.body("ProblemFrame");
     frame.intentMode = "report_only";
     frame.applicableRuleRefs = [];
-    harness.submit("ProblemFrame", "scenario_author", frame);
+    const framed = harness.submit("ProblemFrame", "scenario_author", frame);
+    const topology = harness.service.getRun(harness.started.run.runId).run.topology;
+    if (topology === "micro") {
+      expect(framed.nextAction).toMatchObject({
+        kind: "phase",
+        phase: "agent_3_quality_review",
+        workNodeId: null,
+      });
+      return;
+    }
 
     const contract = harness.body("TaskContract");
     contract.intentMode = "report_only";

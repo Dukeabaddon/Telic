@@ -1,4 +1,4 @@
-import type { ArtifactSubmission, Phase, RunRecord } from "./types.js";
+import type { ArtifactSubmission, Phase, RunRecord, RunTopology } from "./types.js";
 
 export class TransitionError extends Error {
   constructor(message: string) {
@@ -7,7 +7,7 @@ export class TransitionError extends Error {
   }
 }
 
-const expectedByPhase: Record<Phase, string[]> = {
+const standardExpectedByPhase: Record<Phase, string[]> = {
   context_grounding: ["ContextManifest", "ClarificationRequest"],
   agent_1_frame: ["ProblemFrame", "ClarificationRequest"],
   agent_2_compile: ["TaskContract", "ClarificationRequest"],
@@ -16,12 +16,17 @@ const expectedByPhase: Record<Phase, string[]> = {
   agent_3_plan: ["WorkPlan", "ClarificationRequest"],
   agent_4_execute: ["WorkResult", "ClarificationRequest"],
   agent_3_review: ["QualityReview", "ClarificationRequest"],
+  agent_3_evidence_reverify: ["QualityReview", "ClarificationRequest"],
   agent_5_audit: ["ReleaseAudit"],
   agent_5_report: ["UserReport"],
 };
 
+function expectedByPhase(phase: Phase, topology: RunTopology): string[] {
+  return [...standardExpectedByPhase[phase]];
+}
+
 export function requiredArtifactTypes(run: RunRecord): string[] {
-  return [...expectedByPhase[run.phase]];
+  return expectedByPhase(run.phase, run.topology);
 }
 
 function decisionFrom(body: unknown): string {
@@ -72,9 +77,9 @@ export function advanceRun(
   if (artifact.runId !== run.runId) {
     throw new TransitionError("Artifact belongs to a different run");
   }
-  if (!expectedByPhase[run.phase].includes(artifact.type)) {
+  if (!expectedByPhase(run.phase, run.topology).includes(artifact.type)) {
     throw new TransitionError(
-      `Phase ${run.phase} requires ${expectedByPhase[run.phase].join(" or ")}; received ${artifact.type}`,
+      `Phase ${run.phase} requires ${expectedByPhase(run.phase, run.topology).join(" or ")}; received ${artifact.type}`,
     );
   }
 
@@ -93,12 +98,28 @@ export function advanceRun(
         summary: "Repository context was grounded; framing is next.",
         budgetConsumed: null,
       };
-    case "agent_1_frame":
+    case "agent_1_frame": {
+      if (run.topology === "micro") {
+        const nextPhase =
+          run.requestedMode === "report_only" ||
+          run.requestedMode === "plan_only"
+            ? "agent_3_review"
+            : "agent_4_execute";
+        return {
+          run: move(run, nextPhase),
+          summary:
+            nextPhase === "agent_3_review"
+              ? "Problem frame accepted; micro spot-check is next."
+              : "Problem frame accepted; micro execution is next.",
+          budgetConsumed: null,
+        };
+      }
       return {
         run: move(run, "agent_2_compile"),
         summary: "Problem frame accepted; task compilation is next.",
         budgetConsumed: null,
       };
+    }
     case "agent_2_compile":
     case "agent_2_revise":
       return {
@@ -187,6 +208,42 @@ export function advanceRun(
       };
     case "agent_3_review": {
       const decision = decisionFrom(artifact.body);
+      if (run.topology === "micro") {
+        if (decision === "proceed_to_fix") {
+          throw new TransitionError(
+            "Micro topology does not support proceed_to_fix",
+          );
+        }
+        if (decision === "pass" || decision === "block") {
+          return {
+            run: {
+              ...move(run, "agent_5_report"),
+              outcomeHint:
+                decision === "pass"
+                  ? run.outcomeHint
+                  : "blocked",
+            },
+            summary: `Micro spot-check recorded ${decision}; final report is next.`,
+            budgetConsumed: null,
+          };
+        }
+        if (decision === "partial" || decision === "remediate") {
+          return {
+            run: {
+              ...move(run, "agent_1_review"),
+              topology: "standard",
+            },
+            summary:
+              decision === "remediate"
+                ? "MICRO_SPOT_REMEDIATE: micro spot-check escalated to standard contract review."
+                : "MICRO_SPOT_PARTIAL: micro spot-check escalated to standard contract review.",
+            budgetConsumed: null,
+          };
+        }
+        throw new TransitionError(
+          `Unsupported QualityReview decision: ${decision}`,
+        );
+      }
       if (decision === "proceed_to_fix") {
         if (run.requestedMode !== "analyze_and_fix") {
           throw new TransitionError(
@@ -205,9 +262,13 @@ export function advanceRun(
         decision === "partial" ||
         decision === "block"
       ) {
+        const nextPhase =
+          run.topology === "forensic"
+            ? "agent_3_evidence_reverify"
+            : "agent_5_audit";
         return {
           run: {
-            ...move(run, "agent_5_audit"),
+            ...move(run, nextPhase),
             outcomeHint:
               decision === "pass"
                 ? run.outcomeHint
@@ -215,7 +276,10 @@ export function advanceRun(
                   ? "blocked"
                   : "partial",
           },
-          summary: `Quality review recorded ${decision}; independent release audit is next.`,
+          summary:
+            nextPhase === "agent_3_evidence_reverify"
+              ? `Quality review recorded ${decision}; forensic evidence reverify is next.`
+              : `Quality review recorded ${decision}; independent release audit is next.`,
           budgetConsumed: null,
         };
       }
@@ -244,6 +308,39 @@ export function advanceRun(
       }
       throw new TransitionError(
         `Unsupported QualityReview decision: ${decision}`,
+      );
+    }
+    case "agent_3_evidence_reverify": {
+      const decision = decisionFrom(artifact.body);
+      const reviewKind =
+        typeof artifact.body === "object" &&
+        artifact.body !== null &&
+        "reviewKind" in artifact.body &&
+        typeof (artifact.body as { reviewKind?: unknown }).reviewKind === "string"
+          ? (artifact.body as { reviewKind: string }).reviewKind
+          : "spot";
+      if (reviewKind !== "evidence_reverify") {
+        throw new TransitionError(
+          "Forensic evidence reverify requires reviewKind evidence_reverify",
+        );
+      }
+      if (decision === "pass" || decision === "partial" || decision === "block") {
+        return {
+          run: {
+            ...move(run, "agent_5_audit"),
+            outcomeHint:
+              decision === "pass"
+                ? run.outcomeHint
+                : decision === "block"
+                  ? "blocked"
+                  : "partial",
+          },
+          summary: `Forensic evidence reverify recorded ${decision}; release audit is next.`,
+          budgetConsumed: null,
+        };
+      }
+      throw new TransitionError(
+        `Unsupported forensic evidence reverify decision: ${decision}`,
       );
     }
     case "agent_5_audit": {

@@ -20,8 +20,13 @@ import {
 import {
   RunController,
   SqliteLedger,
+  evaluateBrokerAction,
+  inspectRunReplay,
+  permissionsFromEnvelope,
   type ArtifactSubmission,
+  type BrokerDecision,
   type IntentMode,
+  type ReplayReport,
   type RunRecord,
 } from "@telic/core";
 import {
@@ -61,6 +66,8 @@ export interface StartRunRequest {
   authorizationDenied?: string[];
   shellExecuteAllowlist?: string[];
   networkReadDomains?: string[];
+  topologyOverride?: import("@telic/core").RunTopology | null;
+  priorRunId?: string | null;
 }
 
 export interface GroundContextRequest {
@@ -74,6 +81,7 @@ export type RunSummary = Pick<
   | "runId"
   | "schemaVersion"
   | "requestedMode"
+  | "topology"
   | "status"
   | "phase"
   | "resumePhase"
@@ -331,6 +339,7 @@ const tracePhase: Record<RunRecord["phase"], TraceEvent["phase"]> = {
   agent_3_plan: "agent_3_plan",
   agent_4_execute: "agent_4_execute",
   agent_3_review: "agent_3_quality_review",
+  agent_3_evidence_reverify: "agent_3_evidence_reverify",
   agent_5_audit: "agent_5_release_audit",
   agent_5_report: "user_report",
 };
@@ -343,8 +352,13 @@ const canonicalTraceEventType: Record<string, TraceEvent["eventType"]> = {
   phase_submitted: "phase_submitted",
   clarification_requested: "clarification_requested",
   permission_checked: "permission_checked",
+  broker_decision: "broker_decision",
   clarification_answered: "transition_allowed",
   run_cancelled: "run_terminated",
+  topology_classified: "topology_classified",
+  digest_verified: "digest_verified",
+  lineage_linked: "lineage_linked",
+  topology_escalated: "topology_escalated",
 };
 
 const traceActors = new Set<TraceEvent["actor"]>([
@@ -418,6 +432,10 @@ export class TelicService {
       repositoryRoot: this.repositoryRoot,
       originalRequest: input.originalRequest,
       requestedMode: input.mode,
+      ...(input.topologyOverride !== undefined
+        ? { topologyOverride: input.topologyOverride }
+        : {}),
+      ...(input.priorRunId !== undefined ? { priorRunId: input.priorRunId } : {}),
       host: {
         name: input.hostName ?? "mcp-host",
         nativeSubagents: input.nativeSubagents ?? "unknown",
@@ -723,6 +741,7 @@ export class TelicService {
           runId,
           schemaVersion,
           requestedMode,
+          topology,
           status,
           phase,
           resumePhase,
@@ -734,6 +753,7 @@ export class TelicService {
           runId,
           schemaVersion,
           requestedMode,
+          topology,
           status,
           phase,
           resumePhase,
@@ -758,6 +778,61 @@ export class TelicService {
     const artifact = this.ledger.getArtifact(runId, artifactId);
     if (!artifact) throw new Error(`Artifact not found: ${artifactId}`);
     return artifact;
+  }
+
+  checkToolAction(input: {
+    runId: string;
+    actionId: string;
+    expectedRunVersion: number;
+    capability: string;
+    target?: string;
+  }): BrokerDecision {
+    this.assertActionToken(
+      input.runId,
+      input.actionId,
+      input.expectedRunVersion,
+    );
+    const run = this.ledger.requireRun(input.runId);
+    const envelopeRecord = this.ledger.findLatestArtifact(
+      input.runId,
+      "RunEnvelope",
+    );
+    const envelopeBody = envelopeRecord
+      ? this.ledger.getArtifact(input.runId, envelopeRecord.id)?.body
+      : null;
+    const envelopeRef = envelopeRecord
+      ? "artifact://" + input.runId + "/" + envelopeRecord.id
+      : null;
+    const decision = evaluateBrokerAction(
+      {
+        repositoryRoot: run.repositoryRoot,
+        mode: run.requestedMode,
+        permissions: permissionsFromEnvelope(run.requestedMode, envelopeBody),
+        ...(envelopeRef ? { policyRefs: [envelopeRef] } : {}),
+      },
+      {
+        capability: input.capability,
+        ...(input.target !== undefined ? { target: input.target } : {}),
+        runId: input.runId,
+        actionId: input.actionId,
+      },
+    );
+    this.ledger.appendTraceEvent(input.runId, {
+      actor: "host",
+      eventType: "broker_decision",
+      phase: run.phase,
+      inputRefs: envelopeRef ? [envelopeRef] : [],
+      permissionDecision: decision.permissionDecision,
+      decisionSummary: decision.allowed
+        ? "Broker allowed " + input.capability + "."
+        : "Broker denied " + input.capability + ": " + decision.reasonCode + ".",
+    });
+    return decision;
+  }
+
+  replayRun(runId: string): ReplayReport {
+    const run = this.ledger.requireRun(runId);
+    return inspectRunReplay(this.ledger, run);
   }
 
   getTrace(runId: string, afterSequence = 0, limit = 10_000) {

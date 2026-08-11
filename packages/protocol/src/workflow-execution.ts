@@ -494,6 +494,7 @@ export const QualityReviewSchema = z
     hardGates: z.array(HardGateResultSchema).min(1).max(MAX_COLLECTION_ITEMS),
     score: z.number().min(0).max(100),
     remainingRemediations: z.number().int().min(0).max(1),
+    reviewKind: z.enum(["spot", "evidence_reverify"]).default("spot"),
     decision: z.enum([
       "pass",
       "proceed_to_fix",

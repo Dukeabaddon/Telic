@@ -249,6 +249,11 @@ function acceptIntent(
   }
   harness.submit("ProblemFrame", "scenario_author", frame);
 
+  const topology = harness.service.getRun(harness.runId).run.topology;
+  if (topology === "micro") {
+    return;
+  }
+
   const contract = harness.body("TaskContract");
   contract.intentMode = mode;
   contract.contextRefs = mode === "report_only" ? [] : [harness.repositoryRef];
@@ -507,6 +512,7 @@ function makeQualityReview(
     evidenceRef?: string;
     remainingRemediations?: number;
     decision?: "pass" | "proceed_to_fix" | "remediate" | "block" | "partial";
+    reviewKind?: "spot" | "evidence_reverify";
   } = {},
 ): ArtifactBody {
   const review = harness.body("QualityReview");
@@ -597,10 +603,44 @@ function makeQualityReview(
   review.score = 100;
   review.remainingRemediations = options.remainingRemediations ?? 1;
   review.decision = options.decision ?? "pass";
+  if (options.reviewKind) {
+    review.reviewKind = options.reviewKind;
+  }
   review.diagnosisGate = null;
   review.remediationWorkOrder = null;
   review.rationaleSummary = "The current work is evidence-backed and bounded.";
   return review;
+}
+
+function latestQualityReviewId(harness: Harness): string {
+  const reviews = harness.service
+    .getRun(harness.runId)
+    .artifacts.filter((artifact) => artifact.type === "QualityReview");
+  return reviews.at(-1)?.id ?? "quality-review-01";
+}
+
+function submitForensicReverifyIfNeeded(
+  harness: Awaited<ReturnType<typeof createHarness>>,
+  options: {
+    resultIds?: string[];
+    evidenceRef: string;
+    id?: string;
+    planIds?: string[];
+  },
+) {
+  const run = harness.service.getRun(harness.runId).run;
+  if (run.phase !== "agent_3_evidence_reverify") return;
+  harness.submit(
+    "QualityReview",
+    "quality_controller",
+    makeQualityReview(harness, {
+      id: options.id ?? "quality-review-reverify",
+      resultIds: options.resultIds ?? [],
+      evidenceRef: options.evidenceRef,
+      ...(options.planIds ? { planIds: options.planIds } : {}),
+      reviewKind: "evidence_reverify",
+    }),
+  );
 }
 
 function makeReleaseAudit(
@@ -744,8 +784,14 @@ async function completeSimpleMode(
 ) {
   const harness = await createHarness(mode);
   acceptIntent(harness, mode);
-  const plan = makePlan(harness, mode);
-  const planned = harness.submit("WorkPlan", "quality_controller", plan);
+  const topology = harness.service.getRun(harness.runId).run.topology;
+  let planned;
+  if (topology === "micro") {
+    planned = { nextAction: harness.service.getRun(harness.runId).nextAction };
+  } else {
+    const plan = makePlan(harness, mode);
+    planned = harness.submit("WorkPlan", "quality_controller", plan);
+  }
   const executes = mode === "analyze_only" || mode === "fix_only";
   let evidenceRef = `artifact://${harness.runId}/plan-01`;
   const resultIds: string[] = [];
@@ -773,11 +819,30 @@ async function completeSimpleMode(
     "quality_controller",
     makeQualityReview(harness, { resultIds, evidenceRef }),
   );
-  harness.submit(
-    "ReleaseAudit",
-    "release_auditor",
-    makeReleaseAudit(harness, { resultIds, evidenceRef }),
-  );
+  const runAfterReview = harness.service.getRun(harness.runId).run;
+  if (runAfterReview.phase === "agent_3_evidence_reverify") {
+    harness.submit(
+      "QualityReview",
+      "quality_controller",
+      makeQualityReview(harness, {
+        id: "quality-review-reverify",
+        resultIds,
+        evidenceRef,
+        reviewKind: "evidence_reverify",
+      }),
+    );
+  }
+  if (topology !== "micro") {
+    harness.submit(
+      "ReleaseAudit",
+      "release_auditor",
+      makeReleaseAudit(harness, {
+        resultIds,
+        evidenceRef,
+        qualityId: latestQualityReviewId(harness),
+      }),
+    );
+  }
   const terminal = harness.submit(
     "UserReport",
     "release_auditor",
@@ -830,17 +895,26 @@ describe("TelicService full-flow conformance", () => {
         .getRun(harness.runId)
         .artifacts.map((artifact) => artifact.type);
       expect(types.includes("WorkResult")).toBe(executes);
-      expect(types).toEqual(
-        expect.arrayContaining([
-          "ProblemFrame",
-          "TaskContract",
-          "PromptReview",
-          "WorkPlan",
-          "QualityReview",
-          "ReleaseAudit",
-          "UserReport",
-        ]),
-      );
+      const topology = harness.service.getRun(harness.runId).run.topology;
+      const requiredTypes =
+        topology === "micro"
+          ? [
+              "ProblemFrame",
+              "TaskContract",
+              "WorkPlan",
+              "QualityReview",
+              "UserReport",
+            ]
+          : [
+              "ProblemFrame",
+              "TaskContract",
+              "PromptReview",
+              "WorkPlan",
+              "QualityReview",
+              "ReleaseAudit",
+              "UserReport",
+            ];
+      expect(types).toEqual(expect.arrayContaining(requiredTypes));
     },
   );
 
@@ -1003,13 +1077,27 @@ describe("TelicService full-flow conformance", () => {
         evidenceRef: `artifact://${harness.runId}/evidence-02`,
       }),
     );
+    const afterFixReview = harness.service.getRun(harness.runId).run;
+    if (afterFixReview.phase === "agent_3_evidence_reverify") {
+      harness.submit(
+        "QualityReview",
+        "quality_controller",
+        makeQualityReview(harness, {
+          id: "quality-review-reverify",
+          planIds: ["plan-02"],
+          resultIds: ["result-02"],
+          evidenceRef: `artifact://${harness.runId}/evidence-02`,
+          reviewKind: "evidence_reverify",
+        }),
+      );
+    }
     harness.submit(
       "ReleaseAudit",
       "release_auditor",
       makeReleaseAudit(harness, {
         planIds: ["plan-01", "plan-02"],
         resultIds: ["result-01", "result-02"],
-        qualityId: "quality-review-02",
+        qualityId: latestQualityReviewId(harness),
         evidenceRef: `artifact://${harness.runId}/evidence-02`,
       }),
     );

@@ -27,6 +27,7 @@ export const VALID_ARTIFACT_BODIES = {
     originalRequestRef: "artifact://run-01/user-message-01",
     followupRequestRefs: [],
     requestedMode: "analyze_only",
+    topology: "standard",
     status: "active",
     workingContext: {
       repositoryRoot: "/workspace/example",
@@ -393,6 +394,7 @@ export const VALID_ARTIFACT_BODIES = {
     schemaVersion: "1.0",
     id: "quality-review-01",
     runId: "run-01",
+    reviewKind: "spot",
     taskContractRef: "artifact://run-01/contract-01",
     workPlanRefs: ["artifact://run-01/plan-01"],
     workResultRefs: ["artifact://run-01/result-01"],
@@ -484,6 +486,26 @@ export const VALID_ARTIFACT_BODIES = {
     remediationDefect: null,
     userReportRef: "artifact://run-01/user-report-01",
     rationaleSummary: "The report is faithful, compliant, and fully supported.",
+  },
+  ReceiptAudit: {
+    schemaVersion: "1.0",
+    id: "receipt-audit-01",
+    runId: "run-01",
+    controllingReviewRef: "artifact://run-01/quality-review-01",
+    claimEvidenceMatrix: [
+      {
+        claimId: "claim-01",
+        claim: "The request fails at CORS preflight.",
+        criterionIds: ["AC-1"],
+        basis: "direct",
+        status: "supported",
+        evidenceRefs: ["artifact://run-01/browser-response-01"],
+        rationaleSummary:
+          "The captured browser response shows the failed preflight.",
+      },
+    ],
+    digestStatus: "verified",
+    verifiedAt: "2026-07-15T10:05:30Z",
   },
   UserReport: {
     schemaVersion: "1.0",

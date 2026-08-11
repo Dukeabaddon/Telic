@@ -50,12 +50,17 @@ export const TraceEventSchema = z
       "transition_allowed",
       "transition_denied",
       "permission_checked",
+      "broker_decision",
       "tool_started",
       "tool_finished",
       "budget_consumed",
       "clarification_requested",
       "redaction_applied",
       "run_terminated",
+      "topology_classified",
+      "topology_escalated",
+      "digest_verified",
+      "lineage_linked",
     ]),
     inputRefs: z.array(ReferenceUriSchema).max(MAX_COLLECTION_ITEMS),
     outputRefs: z.array(ReferenceUriSchema).max(MAX_COLLECTION_ITEMS),
@@ -89,7 +94,8 @@ export const TraceEventSchema = z
   .strict()
   .superRefine((event, context) => {
     if (
-      event.eventType === "permission_checked" &&
+      (event.eventType === "permission_checked" ||
+        event.eventType === "broker_decision") &&
       event.permissionDecision === null
     ) {
       context.addIssue({

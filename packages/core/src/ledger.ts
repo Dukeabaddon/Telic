@@ -37,6 +37,7 @@ type RunRow = {
   schema_version: string;
   repository_root: string;
   requested_mode: RunRecord["requestedMode"];
+  topology: string;
   status: RunRecord["status"];
   phase: Phase;
   resume_phase: Phase | null;
@@ -44,6 +45,8 @@ type RunRow = {
   prompt_revisions_remaining: number;
   remediations_remaining: number;
   outcome_hint: RunRecord["outcomeHint"];
+  escalation_count: number;
+  prior_run_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -83,6 +86,7 @@ function rowToRun(row: RunRow): RunRecord {
     schemaVersion: "1.0",
     repositoryRoot: row.repository_root,
     requestedMode: row.requested_mode,
+    topology: (row.topology ?? "standard") as RunRecord["topology"],
     status: row.status,
     phase: row.phase,
     resumePhase: row.resume_phase,
@@ -92,6 +96,8 @@ function rowToRun(row: RunRow): RunRecord {
       postExecutionRemediationsRemaining: row.remediations_remaining,
     },
     outcomeHint: row.outcome_hint,
+    escalationCount: row.escalation_count ?? 0,
+    priorRunId: row.prior_run_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -199,6 +205,7 @@ export class SqliteLedger {
         schema_version TEXT NOT NULL,
         repository_root TEXT NOT NULL,
         requested_mode TEXT NOT NULL,
+        topology TEXT NOT NULL DEFAULT 'standard',
         status TEXT NOT NULL,
         phase TEXT NOT NULL,
         resume_phase TEXT,
@@ -206,6 +213,8 @@ export class SqliteLedger {
         prompt_revisions_remaining INTEGER NOT NULL CHECK(prompt_revisions_remaining >= 0),
         remediations_remaining INTEGER NOT NULL CHECK(remediations_remaining >= 0),
         outcome_hint TEXT,
+        escalation_count INTEGER NOT NULL DEFAULT 0,
+        prior_run_id TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       ) STRICT;
@@ -239,6 +248,22 @@ export class SqliteLedger {
       ) STRICT;
       CREATE INDEX IF NOT EXISTS events_run_idx ON trace_events(run_id, sequence);
     `);
+    const runColumns = this.database
+      .prepare("PRAGMA table_info(runs)")
+      .all() as unknown as Array<{ name: string }>;
+    if (!runColumns.some((column) => column.name === "topology")) {
+      this.database.exec(
+        "ALTER TABLE runs ADD COLUMN topology TEXT NOT NULL DEFAULT 'standard'",
+      );
+    }
+    if (!runColumns.some((column) => column.name === "prior_run_id")) {
+      this.database.exec("ALTER TABLE runs ADD COLUMN prior_run_id TEXT");
+    }
+    if (!runColumns.some((column) => column.name === "escalation_count")) {
+      this.database.exec(
+        "ALTER TABLE runs ADD COLUMN escalation_count INTEGER NOT NULL DEFAULT 0",
+      );
+    }
     const traceColumns = this.database
       .prepare("PRAGMA table_info(trace_events)")
       .all() as unknown as Array<{ name: string }>;
@@ -318,16 +343,17 @@ export class SqliteLedger {
     this.database
       .prepare(
         `INSERT INTO runs (
-        run_id, schema_version, repository_root, requested_mode, status, phase,
+        run_id, schema_version, repository_root, requested_mode, topology, status, phase,
         resume_phase, version, prompt_revisions_remaining, remediations_remaining,
-        outcome_hint, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        outcome_hint, escalation_count, prior_run_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         run.runId,
         run.schemaVersion,
         run.repositoryRoot,
         run.requestedMode,
+        run.topology,
         run.status,
         run.phase,
         run.resumePhase,
@@ -335,6 +361,8 @@ export class SqliteLedger {
         run.budgets.promptRevisionsRemaining,
         run.budgets.postExecutionRemediationsRemaining,
         run.outcomeHint,
+        run.escalationCount,
+        run.priorRunId,
         run.createdAt,
         run.updatedAt,
       );
@@ -370,18 +398,23 @@ export class SqliteLedger {
     artifact: ArtifactSubmission,
     event: SubmissionEvent,
     additionalEvents: SubmissionEvent[] = [],
+    companionArtifacts: ArtifactSubmission[] = [],
   ): StoredArtifact {
     this.assertArtifactSlot(artifact.runId, artifact.id);
     const stored = this.prepareArtifact(artifact);
     this.database.exec("BEGIN IMMEDIATE");
     try {
       this.insertPreparedArtifact(stored);
+      for (const companion of companionArtifacts) {
+        this.assertArtifactSlot(companion.runId, companion.id);
+        this.insertPreparedArtifact(this.prepareArtifact(companion));
+      }
       const updated = this.database
         .prepare(
           `UPDATE runs SET
           status = ?, phase = ?, resume_phase = ?, version = ?,
           prompt_revisions_remaining = ?, remediations_remaining = ?, outcome_hint = ?,
-          updated_at = ? WHERE run_id = ? AND version = ?`,
+          topology = ?, escalation_count = ?, prior_run_id = ?, updated_at = ? WHERE run_id = ? AND version = ?`,
         )
         .run(
           nextRun.status,
@@ -391,6 +424,9 @@ export class SqliteLedger {
           nextRun.budgets.promptRevisionsRemaining,
           nextRun.budgets.postExecutionRemediationsRemaining,
           nextRun.outcomeHint,
+          nextRun.topology,
+          nextRun.escalationCount,
+          nextRun.priorRunId,
           nextRun.updatedAt,
           nextRun.runId,
           expectedVersion,
@@ -519,7 +555,7 @@ export class SqliteLedger {
           `UPDATE runs SET
           status = ?, phase = ?, resume_phase = ?, version = ?,
           prompt_revisions_remaining = ?, remediations_remaining = ?, outcome_hint = ?,
-          updated_at = ? WHERE run_id = ? AND version = ?`,
+          topology = ?, escalation_count = ?, prior_run_id = ?, updated_at = ? WHERE run_id = ? AND version = ?`,
         )
         .run(
           nextRun.status,
@@ -529,6 +565,9 @@ export class SqliteLedger {
           nextRun.budgets.promptRevisionsRemaining,
           nextRun.budgets.postExecutionRemediationsRemaining,
           nextRun.outcomeHint,
+          nextRun.topology,
+          nextRun.escalationCount,
+          nextRun.priorRunId,
           nextRun.updatedAt,
           nextRun.runId,
           expectedVersion,

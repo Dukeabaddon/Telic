@@ -13,6 +13,7 @@ import {
   SchemaVersionSchema,
   SummarySchema,
   TerminalStatusSchema,
+  TimestampSchema,
   TraceUriSchema,
 } from "./common.js";
 import {
@@ -251,7 +252,42 @@ export const UserReportSchema = z
     }
   });
 
+export const ReceiptAuditSchema = z
+  .object({
+    schemaVersion: SchemaVersionSchema,
+    id: IdentifierSchema,
+    runId: RunIdSchema,
+    controllingReviewRef: ArtifactUriSchema,
+    claimEvidenceMatrix: z
+      .array(ClaimEvidenceEntrySchema)
+      .max(MAX_COLLECTION_ITEMS),
+    digestStatus: z.enum(["verified", "failed"]),
+    verifiedAt: TimestampSchema,
+  })
+  .strict()
+  .superRefine((receipt, context) => {
+    const claimIds = receipt.claimEvidenceMatrix.map((entry) => entry.claimId);
+    if (new Set(claimIds).size !== claimIds.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["claimEvidenceMatrix"],
+        message: "Receipt-audit claim identifiers must be unique",
+      });
+    }
+    if (
+      receipt.digestStatus === "verified" &&
+      receipt.claimEvidenceMatrix.some((entry) => entry.status !== "supported")
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["digestStatus"],
+        message: "Verified receipts require supported claim evidence",
+      });
+    }
+  });
+
 export type ClaimEvidenceEntry = z.infer<typeof ClaimEvidenceEntrySchema>;
 export type ReleaseDefect = z.infer<typeof ReleaseDefectSchema>;
 export type ReleaseAudit = z.infer<typeof ReleaseAuditSchema>;
+export type ReceiptAudit = z.infer<typeof ReceiptAuditSchema>;
 export type UserReport = z.infer<typeof UserReportSchema>;

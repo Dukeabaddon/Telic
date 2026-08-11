@@ -187,6 +187,10 @@ function registerTools(server: McpServer, service: TelicService): void {
           .array(z.string().min(1).max(253))
           .max(256)
           .default([]),
+        topology_override: z
+          .enum(["micro", "standard", "forensic"])
+          .optional(),
+        prior_run_id: z.string().uuid().optional(),
       },
       annotations: {
         readOnlyHint: false,
@@ -211,6 +215,12 @@ function registerTools(server: McpServer, service: TelicService): void {
             authorizationDenied: input.authorization_denied,
             shellExecuteAllowlist: input.shell_execute_allowlist,
             networkReadDomains: input.network_read_domains,
+            ...(input.topology_override
+              ? { topologyOverride: input.topology_override }
+              : {}),
+            ...(input.prior_run_id
+              ? { priorRunId: input.prior_run_id }
+              : {}),
           }),
         });
       } catch (error) {
@@ -532,7 +542,74 @@ function registerTools(server: McpServer, service: TelicService): void {
         return errorResult(error);
       }
     },
+
   );
+  server.registerTool(
+    "telic_check_tool_action",
+    {
+      title: "Check host tool action",
+      description:
+        "Evaluate a host-native tool call against run permissions before execution. Records a broker_decision trace event.",
+      inputSchema: {
+        run_id: id,
+        action_id: id,
+        expected_run_version: z.number().int().min(0),
+        capability,
+        target: z.string().min(1).max(2_048).optional(),
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async ({
+      run_id,
+      action_id,
+      expected_run_version,
+      capability,
+      target,
+    }) => {
+      try {
+        const decision = service.checkToolAction({
+          runId: run_id,
+          actionId: action_id,
+          expectedRunVersion: expected_run_version,
+          capability,
+          ...(target !== undefined ? { target } : {}),
+        });
+        return successResult({ ok: true, decision });
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "telic_replay_run",
+    {
+      title: "Replay run inspector",
+      description:
+        "Forensic replay report with artifact digest steps and trace highlights. Micro topology returns a degraded flag without full replay.",
+      inputSchema: { run_id: id },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ run_id }) => {
+      try {
+        const report = service.replayRun(run_id);
+        return successResult({ ok: true, report });
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
 }
 
 export function createTelicMcpServer(service: TelicService): McpServer {

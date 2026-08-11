@@ -27,45 +27,45 @@ Telic is an opt-in workflow plugin, agent workflow compiler, and safety layer fo
 
 ## Why Telic
 
-| A normal agent session | A Telic workflow |
-| --- | --- |
-| A vague request can expand silently | Intent, scope, and permissions become explicit |
-| “Done” may be only an agent claim | Completion claims must reference evidence |
-| Review can continue without a boundary | Contract revision and remediation are bounded |
-| Missing tools can invite guesses | Unavailable checks remain clearly unverified |
+| A normal agent session                 | A Telic workflow                               |
+| -------------------------------------- | ---------------------------------------------- |
+| A vague request can expand silently    | Intent, scope, and permissions become explicit |
+| “Done” may be only an agent claim      | Completion claims must reference evidence      |
+| Review can continue without a boundary | Contract revision and remediation are bounded  |
+| Missing tools can invite guesses       | Unavailable checks remain clearly unverified   |
 
 Telic gives the coding agent a workflow spine. It does not replace the agent.
 
 ## ✨ Features
 
-| Feature | Description |
-| --- | --- |
-| 🧭 **Rough-request compiler** | Turns `Telic: …` into inspectable roles, requirements, and handoffs |
-| 🔐 **Permission modes** | `report_only`, `plan_only`, `analyze_only`, `fix_only`, `analyze_and_fix` |
-| 🧾 **Evidence-backed reports** | Final claims must cite recorded evidence, not vibes |
-| 🧱 **Strict protocol** | Zod v4 schemas, camelCase bodies, `schemaVersion: "1.0"` |
-| 🗂️ **Local run ledger** | SQLite metadata + immutable SHA-256 artifact bodies |
-| 📦 **Bounded repo grounding** | Git / ripgrep / filesystem inventory with budgets and secret heuristics |
-| 🔌 **Codex plugin + MCP** | Reference Git marketplace plugin and portable `telic-mcp` npm package |
-| 🧩 **Host adapters** | Preview packs for Claude Code, Cursor, Antigravity, Kiro, Cline, Roo |
-| 🛑 **Missing permission = denial** | Telic does not silently broaden authority |
+| Feature                            | Description                                                               |
+| ---------------------------------- | ------------------------------------------------------------------------- |
+| 🧭 **Rough-request compiler**      | Turns `Telic: …` into inspectable roles, requirements, and handoffs       |
+| 🔐 **Permission modes**            | `report_only`, `plan_only`, `analyze_only`, `fix_only`, `analyze_and_fix` |
+| 🧾 **Evidence-backed reports**     | Final claims must cite recorded evidence, not vibes                       |
+| 🧱 **Strict protocol**             | Zod v4 schemas, camelCase bodies, `schemaVersion: "1.0"`                  |
+| 🗂️ **Local run ledger**            | SQLite metadata + immutable SHA-256 artifact bodies                       |
+| 📦 **Bounded repo grounding**      | Git / ripgrep / filesystem inventory with budgets and secret heuristics   |
+| 🔌 **Codex plugin + MCP**          | Reference Git marketplace plugin and portable `telic-mcp` npm package     |
+| 🧩 **Host adapters**               | Preview packs for Claude Code, Cursor, Antigravity, Kiro, Cline, Roo      |
+| 🛑 **Missing permission = denial** | Telic does not silently broaden authority                                 |
 
 ## 🛠️ Tech stack
 
-| Layer | Technology | Version |
-| --- | --- | --- |
-| Runtime | Node.js | `>=24.15.0` |
-| Language | TypeScript | 7.0.x |
-| Protocol schemas | Zod | 4.4.3 |
-| MCP SDK | `@modelcontextprotocol/sdk` | 1.29.0 |
-| Ledger | Node.js `node:sqlite` (`DatabaseSync`) | built-in |
-| Artifact integrity | SHA-256 content-addressed store | local |
-| Bundle | esbuild | 0.28.1 |
-| Tests | Vitest + `@vitest/coverage-v8` | 4.1.10 |
-| Format | Prettier | 3.9.5 |
-| npm package | `telic-mcp` | 0.1.1 |
-| Website | Next.js + React | 16.2.x / 19.2.x |
-| Site styling | Tailwind CSS | 4.3.x |
+| Layer              | Technology                             | Version         |
+| ------------------ | -------------------------------------- | --------------- |
+| Runtime            | Node.js                                | `>=24.15.0`     |
+| Language           | TypeScript                             | 7.0.x           |
+| Protocol schemas   | Zod                                    | 4.4.3           |
+| MCP SDK            | `@modelcontextprotocol/sdk`            | 1.29.0          |
+| Ledger             | Node.js `node:sqlite` (`DatabaseSync`) | built-in        |
+| Artifact integrity | SHA-256 content-addressed store        | local           |
+| Bundle             | esbuild                                | 0.28.1          |
+| Tests              | Vitest + `@vitest/coverage-v8`         | 4.1.10          |
+| Format             | Prettier                               | 3.9.5           |
+| npm package        | `telic-mcp`                            | 0.1.1           |
+| Website            | Next.js + React                        | 16.2.x / 19.2.x |
+| Site styling       | Tailwind CSS                           | 4.3.x           |
 
 ## 🏗️ Architecture
 
@@ -89,15 +89,15 @@ Host model authors semantic artifacts
 Controller accepts or rejects on evidence rules
 ```
 
-| Package | Role |
-| --- | --- |
-| `@telic/protocol` | Strict artifact schemas and parsing |
-| `@telic/core` | Deterministic controller, permissions, ledger |
-| `@telic/context` | Bounded repository inventory and selection |
-| `@telic/mcp` | Nine local MCP tools + `telic_workflow` prompt |
-| `@telic/cli` / `telic-mcp` | Doctor, status, trace, artifact, mcp commands |
-| `plugins/telic` | Codex reference plugin + bundled MCP server |
-| `adapters/` | Source-preview packs for other hosts |
+| Package                    | Role                                           |
+| -------------------------- | ---------------------------------------------- |
+| `@telic/protocol`          | Strict artifact schemas and parsing            |
+| `@telic/core`              | Deterministic controller, permissions, ledger  |
+| `@telic/context`           | Bounded repository inventory and selection     |
+| `@telic/mcp`               | Nine local MCP tools + `telic_workflow` prompt |
+| `@telic/cli` / `telic-mcp` | Doctor, status, trace, artifact, mcp commands  |
+| `plugins/telic`            | Codex reference plugin + bundled MCP server    |
+| `adapters/`                | Source-preview packs for other hosts           |
 
 Semantic reasoning stays in the host model. Deterministic software owns workflow state, schema validation, bounded context, immutable storage, and observable handoffs. The controller never calls a model.
 
@@ -114,14 +114,14 @@ Semantic reasoning stays in the host model. Deterministic software owns workflow
 
 Telic optimizes for **honest completion**, not fake confidence scores.
 
-| Step | What Telic enforces | What it does **not** claim |
-| --- | --- | --- |
-| Frame | Scenario and requirements become explicit artifacts | Perfect understanding of every repo |
-| Bound | Mode and permissions gate what may change | Interception of every host-native shell/editor action |
-| Ground | Context selection is budgeted, path-contained, and digest-tracked | A dedicated enterprise secret scanner |
-| Execute | Allowed work stays inside the approved contract | That the host model cannot be influenced by untrusted text |
-| Verify | Completion needs typed evidence and rule coverage | That unavailable checks were somehow “fine” |
-| Report | Unsupported claims stay unverified or blocked | A guaranteed correct fix without evidence |
+| Step    | What Telic enforces                                               | What it does **not** claim                                 |
+| ------- | ----------------------------------------------------------------- | ---------------------------------------------------------- |
+| Frame   | Scenario and requirements become explicit artifacts               | Perfect understanding of every repo                        |
+| Bound   | Mode and permissions gate what may change                         | Interception of every host-native shell/editor action      |
+| Ground  | Context selection is budgeted, path-contained, and digest-tracked | A dedicated enterprise secret scanner                      |
+| Execute | Allowed work stays inside the approved contract                   | That the host model cannot be influenced by untrusted text |
+| Verify  | Completion needs typed evidence and rule coverage                 | That unavailable checks were somehow “fine”                |
+| Report  | Unsupported claims stay unverified or blocked                     | A guaranteed correct fix without evidence                  |
 
 **Honest limits**
 
@@ -270,13 +270,13 @@ complete [installation guide](docs/INSTALLATION.md).
 
 State the boundary in normal language:
 
-| Mode | What Telic may do |
-| --- | --- |
-| `report_only` | Explain supplied facts or existing results |
-| `plan_only` | Produce a plan without executing it |
-| `analyze_only` | Investigate without changing files or runtime state |
-| `fix_only` | Apply a known correction inside the approved scope |
-| `analyze_and_fix` | Diagnose first, then fix an evidenced root cause |
+| Mode              | What Telic may do                                   |
+| ----------------- | --------------------------------------------------- |
+| `report_only`     | Explain supplied facts or existing results          |
+| `plan_only`       | Produce a plan without executing it                 |
+| `analyze_only`    | Investigate without changing files or runtime state |
+| `fix_only`        | Apply a known correction inside the approved scope  |
+| `analyze_and_fix` | Diagnose first, then fix an evidenced root cause    |
 
 Missing permission is denial. Telic does not silently broaden your request.
 
@@ -290,11 +290,11 @@ Telic runs locally through STDIO and stores its run ledger outside your reposito
 
 Telic is a public preview.
 
-| Distribution | Support |
-| --- | --- |
-| Codex Git marketplace plugin | Available |
-| npm package `telic-mcp` | Published |
-| Additional host adapters in `adapters/` | Preview |
+| Distribution                            | Support   |
+| --------------------------------------- | --------- |
+| Codex Git marketplace plugin            | Available |
+| npm package `telic-mcp`                 | Published |
+| Additional host adapters in `adapters/` | Preview   |
 
 Read the [current implementation status](docs/STATUS.md) for exact technical boundaries.
 

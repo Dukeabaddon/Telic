@@ -9,6 +9,11 @@ type TrackedLinkProps = LinkProps &
     readonly children: ReactNode;
   };
 
-export function TrackedLink({ children, ...props }: TrackedLinkProps) {
+export function TrackedLink({
+  eventName: _eventName,
+  children,
+  ...props
+}: TrackedLinkProps) {
   return <Link {...props}>{children}</Link>;
 }
+

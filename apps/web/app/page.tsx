@@ -39,7 +39,9 @@ export default function HomePage() {
 
       <section className="hero shell" data-scroll-reveal-static="">
         <div className="hero-copy">
-          <div className="hero-badge">Local MCP workflow · Open source</div>
+          <div className="hero-badge">
+            Evidence-backed workflows · Open source
+          </div>
           <h1>
             The workflow spine for <span>coding agents.</span>
           </h1>

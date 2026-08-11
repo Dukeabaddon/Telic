@@ -400,4 +400,88 @@ describe("SQLite ledger and content-addressed artifacts", () => {
     expect(ledger.listArtifacts(run.runId)).toHaveLength(1);
     expect(ledger.listTrace(run.runId)).toHaveLength(2);
   });
+
+  it("migrates legacy runs tables missing escalation_count", () => {
+    const root = mkdtempSync(join(tmpdir(), "telic-ledger-migrate-"));
+    const databasePath = join(root, "ledger.sqlite3");
+    const database = new DatabaseSync(databasePath);
+    database.exec(`
+      CREATE TABLE runs (
+        run_id TEXT PRIMARY KEY,
+        schema_version TEXT NOT NULL,
+        repository_root TEXT NOT NULL,
+        requested_mode TEXT NOT NULL,
+        topology TEXT NOT NULL DEFAULT 'standard',
+        status TEXT NOT NULL,
+        phase TEXT NOT NULL,
+        resume_phase TEXT,
+        version INTEGER NOT NULL,
+        prompt_revisions_remaining INTEGER NOT NULL,
+        remediations_remaining INTEGER NOT NULL,
+        outcome_hint TEXT,
+        prior_run_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE artifacts (
+        artifact_id TEXT NOT NULL,
+        run_id TEXT NOT NULL,
+        type TEXT NOT NULL,
+        schema_version TEXT NOT NULL,
+        producer TEXT NOT NULL,
+        sha256 TEXT NOT NULL,
+        source_refs_json TEXT NOT NULL,
+        redaction TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY(run_id, artifact_id)
+      );
+      CREATE TABLE trace_events (
+        event_id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL,
+        sequence INTEGER NOT NULL,
+        timestamp TEXT NOT NULL,
+        actor TEXT NOT NULL,
+        phase TEXT NOT NULL,
+        event_type TEXT NOT NULL,
+        input_refs_json TEXT NOT NULL,
+        output_refs_json TEXT NOT NULL,
+        permission_decision_json TEXT,
+        decision_summary TEXT NOT NULL,
+        budget_snapshot_json TEXT NOT NULL,
+        UNIQUE(run_id, sequence)
+      );
+      INSERT INTO runs (
+        run_id, schema_version, repository_root, requested_mode, topology, status, phase,
+        resume_phase, version, prompt_revisions_remaining, remediations_remaining,
+        outcome_hint, prior_run_id, created_at, updated_at
+      ) VALUES (
+        'legacy-run', '1.0', '/repo', 'report_only', 'standard', 'running', 'context_grounding',
+        NULL, 1, 1, 1, NULL, NULL, '2026-07-15T10:00:00Z', '2026-07-15T10:00:00Z'
+      );
+    `);
+    database.close();
+
+    const ledger = new SqliteLedger(root);
+    ledgers.push(ledger);
+    const migrated = ledger.requireRun("legacy-run");
+    expect(migrated.escalationCount).toBe(0);
+
+    const now = "2026-07-15T10:01:00Z";
+    ledger.transitionWithoutArtifact(
+      migrated.version,
+      {
+        ...migrated,
+        phase: "agent_1_frame",
+        version: migrated.version + 1,
+        updatedAt: now,
+      },
+      {
+        actor: "controller",
+        eventType: "transition_allowed",
+        phase: "context_grounding",
+        decisionSummary: "Migrated legacy row accepts escalation_count updates.",
+      },
+    );
+    expect(ledger.requireRun("legacy-run").phase).toBe("agent_1_frame");
+  });
 });

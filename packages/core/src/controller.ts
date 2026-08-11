@@ -1030,7 +1030,7 @@ export class RunController {
         eventType: "lineage_linked",
         phase: run.phase,
         decisionSummary: `Linked to prior run ${run.priorRunId}`,
-        inputRefs: [`run://${run.priorRunId}`],
+        inputRefs: [`trace://${run.priorRunId}`],
       });
     }
     return { run, nextAction: this.getNextAction(runId) };

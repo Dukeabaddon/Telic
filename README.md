@@ -142,7 +142,9 @@ Telic: Is the profession recommendation algorithm flawed, and are the school
 recommendations appropriate for each profession? Analyze only. Do not change files.
 ```
 
-Telic turns that into an inspectable workflow:
+Telic turns that into an **evidence-backed, inspectable workflow**. CAGT classifies each run as `micro`, `standard`, or `forensic` from the request and mode; simple read-only work can finish on a shorter path, while richer jobs walk the full graph. If micro evidence is insufficient, EGEL promotes the run to standard review instead of stopping at a dead end.
+
+On the full path:
 
 ```mermaid
 flowchart LR
@@ -154,6 +156,8 @@ flowchart LR
     W --> V["Verify evidence"]
     V --> O["Report honestly"]
 ```
+
+`micro` shortens simple `report_only` runs to grounding, framing, spot review, and report.
 
 The workflow uses five logical roles:
 

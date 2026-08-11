@@ -13,6 +13,9 @@ function run(overrides: Partial<RunRecord> = {}): RunRecord {
     schemaVersion: "1.0",
     repositoryRoot: "/repo",
     requestedMode: "analyze_and_fix",
+    topology: "standard",
+    escalationCount: 0,
+    priorRunId: null,
     status: "running",
     phase: "context_grounding",
     resumePhase: null,
@@ -44,6 +47,31 @@ describe("bounded state machine", () => {
     expect(() => advanceRun(run(), artifact("WorkResult"))).toThrow(
       TransitionError,
     );
+  });
+
+  it("micro report_only skips compile and routes to spot review", () => {
+    const result = advanceRun(
+      run({
+        phase: "agent_1_frame",
+        topology: "micro",
+        escalationCount: 0,
+        requestedMode: "report_only",
+      }),
+      artifact("ProblemFrame"),
+    );
+    expect(result.run.phase).toBe("agent_3_review");
+  });
+
+  it("micro quality pass goes directly to report", () => {
+    const result = advanceRun(
+      run({
+        phase: "agent_3_review",
+        topology: "micro",
+        requestedMode: "report_only",
+      }),
+      artifact("QualityReview", { decision: "pass" }),
+    );
+    expect(result.run.phase).toBe("agent_5_report");
   });
 
   it("allows exactly one prompt revision", () => {
@@ -255,6 +283,23 @@ describe("bounded state machine", () => {
       ),
     ).toThrow(/Unsupported/);
     expect(() => resumeAfterClarification(run())).toThrow(/not awaiting/);
+  });
+
+  it("routes forensic quality pass through evidence reverify", () => {
+    const result = advanceRun(
+      run({ topology: "forensic", phase: "agent_3_review" }),
+      artifact("QualityReview", { decision: "pass" }),
+    );
+    expect(result.run.phase).toBe("agent_3_evidence_reverify");
+
+    const reverify = advanceRun(
+      result.run,
+      artifact("QualityReview", {
+        decision: "pass",
+        reviewKind: "evidence_reverify",
+      }),
+    );
+    expect(reverify.run.phase).toBe("agent_5_audit");
   });
 
   it("rejects artifacts from another run and submissions to stopped runs", () => {

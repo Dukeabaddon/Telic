@@ -31,6 +31,7 @@ const skillTargets = [
 ];
 
 const expectedTools = [
+  "telic_check_tool_action",
   "telic_get_artifact",
   "telic_get_next_action",
   "telic_get_run",
@@ -38,6 +39,7 @@ const expectedTools = [
   "telic_list_runs",
   "telic_cancel_run",
   "telic_ground_context",
+  "telic_replay_run",
   "telic_start_run",
   "telic_submit_artifact",
 ];

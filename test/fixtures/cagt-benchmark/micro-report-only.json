@@ -1,0 +1,15 @@
+{
+  "topology": "micro",
+  "mode": "report_only",
+  "expectedPhases": [
+    "context_discovery",
+    "agent_1_frame",
+    "agent_3_quality_review",
+    "user_report"
+  ],
+  "maxPhases": 5,
+  "requiresReleaseAudit": false,
+  "requiresReceiptAudit": true,
+  "requiresPromptReview": false,
+  "timeRatioTarget": 1.15
+}

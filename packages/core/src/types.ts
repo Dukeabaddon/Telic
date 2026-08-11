@@ -8,6 +8,9 @@ export const intentModes = [
 
 export type IntentMode = (typeof intentModes)[number];
 
+export const runTopologies = ["micro", "standard", "forensic"] as const;
+export type RunTopology = (typeof runTopologies)[number];
+
 export const phases = [
   "context_grounding",
   "agent_1_frame",
@@ -17,6 +20,7 @@ export const phases = [
   "agent_3_plan",
   "agent_4_execute",
   "agent_3_review",
+  "agent_3_evidence_reverify",
   "agent_5_audit",
   "agent_5_report",
 ] as const;
@@ -40,6 +44,9 @@ export interface RunRecord {
   schemaVersion: "1.0";
   repositoryRoot: string;
   requestedMode: IntentMode;
+  topology: RunTopology;
+  escalationCount: number;
+  priorRunId: string | null;
   status: RunStatus;
   phase: Phase;
   resumePhase: Phase | null;

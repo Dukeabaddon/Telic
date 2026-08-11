@@ -31,7 +31,11 @@ import {
   WorkPlanSchema,
   WorkResultSchema,
 } from "./workflow-execution.js";
-import { ReleaseAuditSchema, UserReportSchema } from "./workflow-release.js";
+import {
+  ReceiptAuditSchema,
+  ReleaseAuditSchema,
+  UserReportSchema,
+} from "./workflow-release.js";
 
 export const ArtifactBodySchemas = {
   RunEnvelope: RunEnvelopeSchema,
@@ -46,6 +50,7 @@ export const ArtifactBodySchemas = {
   WorkResult: WorkResultSchema,
   QualityReview: QualityReviewSchema,
   ReleaseAudit: ReleaseAuditSchema,
+  ReceiptAudit: ReceiptAuditSchema,
   UserReport: UserReportSchema,
   TraceEvent: TraceEventSchema,
   Evidence: EvidenceArtifactSchema,
@@ -147,6 +152,13 @@ const ArtifactEnvelopeVariants = [
       ...ArtifactMetadataShape,
       artifactType: z.literal("ReleaseAudit"),
       body: ReleaseAuditSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...ArtifactMetadataShape,
+      artifactType: z.literal("ReceiptAudit"),
+      body: ReceiptAuditSchema,
     })
     .strict(),
   z

@@ -2,8 +2,10 @@ import { existsSync, realpathSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
-import { SqliteLedger } from "@telic/core";
+import { inspectRunReplay, SqliteLedger } from "@telic/core";
 import { defaultStateDirectory, startStdioServer } from "@telic/mcp";
+
+import { evaluateBrokerGate } from "./broker-gate.js";
 
 export interface CliIo {
   stdout: (line: string) => void;
@@ -38,6 +40,8 @@ function usage(): string {
     "  telic status RUN_ID [--repo PATH] [--json]",
     "  telic trace RUN_ID [--repo PATH] [--json]",
     "  telic artifact RUN_ID ARTIFACT_ID [--repo PATH] [--json]",
+    "  telic replay RUN_ID [--repo PATH] [--json]",
+    "  telic broker-gate [--repo PATH]",
     "  telic mcp",
     "",
     "Telic is local-only by default and never invokes a model API.",
@@ -75,6 +79,14 @@ function openExistingLedger(repository: string): SqliteLedger {
     throw new Error(`No Telic ledger exists at ${stateDirectory}`);
   }
   return new SqliteLedger(stateDirectory);
+}
+
+async function readStdinText(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks).toString("utf8");
 }
 
 export async function runCli(
@@ -128,11 +140,29 @@ export async function runCli(
       return checks.node.ok ? 0 : 1;
     }
 
+    if (command === "broker-gate") {
+      const raw = await readStdinText();
+      const hookInput = raw.trim()
+        ? (JSON.parse(raw) as Record<string, unknown>)
+        : {};
+      const result = evaluateBrokerGate({
+        repositoryRoot: repository,
+        hookInput,
+      });
+      process.stdout.write(`${JSON.stringify(result)}\n`);
+      return 0;
+    }
+
     const runId = args[0];
     if (!runId || runId.startsWith("--"))
       throw new Error(`${command} requires RUN_ID`);
     const ledger = openExistingLedger(repository);
     try {
+      if (command === "replay") {
+        const run = ledger.requireRun(runId);
+        io.stdout(render(inspectRunReplay(ledger, run), json));
+        return 0;
+      }
       if (command === "status") {
         const run = ledger.requireRun(runId);
         io.stdout(

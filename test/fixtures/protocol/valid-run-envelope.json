@@ -19,20 +19,60 @@
   },
   "authorization": {
     "granted": {
-      "repository": { "read": ["**"], "write": [], "delete": [] },
-      "shell": { "inspect": true, "executeAllowlist": [] },
-      "runtime": { "inspect": ["local"], "restart": [] },
-      "browser": { "inspect": true, "mutateState": false },
-      "network": { "readDomains": [], "externalWrite": false },
-      "subagents": { "spawn": true, "maximumChildren": 3, "maximumDepth": 1 }
+      "repository": {
+        "read": ["**"],
+        "write": [],
+        "delete": []
+      },
+      "shell": {
+        "inspect": true,
+        "executeAllowlist": []
+      },
+      "runtime": {
+        "inspect": ["local"],
+        "restart": []
+      },
+      "browser": {
+        "inspect": true,
+        "mutateState": false
+      },
+      "network": {
+        "readDomains": [],
+        "externalWrite": false
+      },
+      "subagents": {
+        "spawn": true,
+        "maximumChildren": 3,
+        "maximumDepth": 1
+      }
     },
     "denied": {
-      "repository": { "read": [], "write": ["**"], "delete": ["**"] },
-      "shell": { "inspect": false, "executeAllowlist": [] },
-      "runtime": { "inspect": [], "restart": ["*"] },
-      "browser": { "inspect": false, "mutateState": true },
-      "network": { "readDomains": [], "externalWrite": true },
-      "subagents": { "spawn": false, "maximumChildren": 0, "maximumDepth": 0 }
+      "repository": {
+        "read": [],
+        "write": ["**"],
+        "delete": ["**"]
+      },
+      "shell": {
+        "inspect": false,
+        "executeAllowlist": []
+      },
+      "runtime": {
+        "inspect": [],
+        "restart": ["*"]
+      },
+      "browser": {
+        "inspect": false,
+        "mutateState": true
+      },
+      "network": {
+        "readDomains": [],
+        "externalWrite": true
+      },
+      "subagents": {
+        "spawn": false,
+        "maximumChildren": 0,
+        "maximumDepth": 0
+      }
     }
   },
   "budgets": {
@@ -41,5 +81,6 @@
     "maximumParallelWorkers": 3,
     "maximumSubagentDepth": 1
   },
-  "policyRefs": ["repo://AGENTS.md"]
+  "policyRefs": ["repo://AGENTS.md"],
+  "topology": "standard"
 }

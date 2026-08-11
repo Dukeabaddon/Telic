@@ -85,6 +85,8 @@ export const IntentModeSchema = z.enum([
   "analyze_and_fix",
 ]);
 
+export const RunTopologySchema = z.enum(["micro", "standard", "forensic"]);
+
 export const ActionCapabilitySchema = z.enum([
   "repository.read",
   "repository.write",
@@ -176,6 +178,7 @@ export const PhaseSchema = z.enum([
   "agent_4_execute",
   "diagnosis_review",
   "agent_3_quality_review",
+  "agent_3_evidence_reverify",
   "remediation_plan",
   "agent_4_remediation",
   "agent_5_release_audit",
@@ -211,6 +214,7 @@ export const ArtifactTypeSchema = z.enum([
   "WorkResult",
   "QualityReview",
   "ReleaseAudit",
+  "ReceiptAudit",
   "UserReport",
   "TraceEvent",
   "Evidence",
@@ -357,6 +361,7 @@ export const FindingSchema = z
   });
 
 export type IntentMode = z.infer<typeof IntentModeSchema>;
+export type RunTopology = z.infer<typeof RunTopologySchema>;
 export type ActionCapability = z.infer<typeof ActionCapabilitySchema>;
 export type RunStatus = z.infer<typeof RunStatusSchema>;
 export type TerminalStatus = z.infer<typeof TerminalStatusSchema>;

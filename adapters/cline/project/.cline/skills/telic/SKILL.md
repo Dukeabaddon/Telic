@@ -117,6 +117,14 @@ Use the bundled tools in the order described by [tool-usage.md](references/tool-
 
 The MCP server validates submitted artifacts and controls Telic transitions, but it does not intercept editor, shell, browser, network, or subagent actions invoked directly through the host. Check each host-native action against the current permission ceiling before acting, preserve its evidence, and let the host enforce its own approvals. Never describe Telic's post-action validation or release audit as host-level prevention.
 
+### Host-native tools
+
+Before mutating host tools (editor writes, shell, browser state, network writes):
+
+- Call `telic_check_tool_action` with the current `runId`, `actionId`, `expectedRunVersion`, capability, and target.
+- When `allowed` is false, stop and report the `reasonCode` and `permissionDecision`; do not bypass the denial.
+- When allowed, proceed with the host action and capture redacted evidence for the WorkResult as usual.
+
 If Telic MCP tools are unavailable:
 
 1. State that the run is an **untracked Telic preview** before continuing.

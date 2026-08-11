@@ -6,6 +6,7 @@ export * from "./evidence.js";
 export * from "./json-schema.js";
 export * from "./parse.js";
 export * from "./trace.js";
+export * from "./topology.js";
 export * from "./workflow-execution.js";
 export * from "./workflow-intent.js";
 export * from "./workflow-release.js";

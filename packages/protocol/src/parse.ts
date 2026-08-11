@@ -20,7 +20,11 @@ import {
   WorkPlanSchema,
   WorkResultSchema,
 } from "./workflow-execution.js";
-import { ReleaseAuditSchema, UserReportSchema } from "./workflow-release.js";
+import {
+  ReceiptAuditSchema,
+  ReleaseAuditSchema,
+  UserReportSchema,
+} from "./workflow-release.js";
 
 function parserFor<Schema extends z.ZodType>(schema: Schema) {
   return (input: unknown): z.infer<Schema> => schema.parse(input);
@@ -43,6 +47,7 @@ export const parseWorkPlan = parserFor(WorkPlanSchema);
 export const parseWorkResult = parserFor(WorkResultSchema);
 export const parseQualityReview = parserFor(QualityReviewSchema);
 export const parseReleaseAudit = parserFor(ReleaseAuditSchema);
+export const parseReceiptAudit = parserFor(ReceiptAuditSchema);
 export const parseUserReport = parserFor(UserReportSchema);
 export const parseTraceEvent = parserFor(TraceEventSchema);
 export const parseEvidenceArtifact = parserFor(EvidenceArtifactSchema);

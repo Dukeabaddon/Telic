@@ -30985,14 +30985,14 @@ function errorResult(error51) {
 }
 
 // packages/mcp/src/service.ts
-import { createHash as createHash4 } from "node:crypto";
-import { existsSync as existsSync3, realpathSync as realpathSync4 } from "node:fs";
+import { createHash as createHash5 } from "node:crypto";
+import { existsSync as existsSync4, realpathSync as realpathSync4 } from "node:fs";
 import { homedir } from "node:os";
 import {
   basename,
   dirname as dirname3,
   isAbsolute as isAbsolute6,
-  join as join2,
+  join as join3,
   relative as relative5,
   resolve as resolve5,
   sep as sep5
@@ -31856,6 +31856,25 @@ async function groundRepository(input) {
   };
 }
 
+// packages/core/dist/active-session.js
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+function activeSessionPath(stateDirectory) {
+  return join(stateDirectory, "active-session.json");
+}
+function writeActiveSession(stateDirectory, session) {
+  mkdirSync(stateDirectory, { recursive: true, mode: 448 });
+  writeFileSync(activeSessionPath(stateDirectory), JSON.stringify(session), {
+    encoding: "utf8",
+    mode: 384
+  });
+}
+function clearActiveSession(stateDirectory) {
+  const path = activeSessionPath(stateDirectory);
+  if (existsSync(path))
+    unlinkSync(path);
+}
+
 // packages/core/dist/canonical-json.js
 import { createHash as createHash3 } from "node:crypto";
 function normalize(value, seen) {
@@ -31909,9 +31928,9 @@ import { realpathSync as realpathSync3 } from "node:fs";
 
 // packages/core/dist/ledger.js
 import { randomUUID } from "node:crypto";
-import { chmodSync, closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, closeSync, existsSync as existsSync2, lstatSync, mkdirSync as mkdirSync2, openSync, readFileSync as readFileSync2, realpathSync, renameSync, rmSync, writeFileSync as writeFileSync2 } from "node:fs";
 import { constants as fsConstants } from "node:fs";
-import { dirname, isAbsolute as isAbsolute3, join, relative as relative3, resolve as resolve3, sep as sep3 } from "node:path";
+import { dirname, isAbsolute as isAbsolute3, join as join2, relative as relative3, resolve as resolve3, sep as sep3 } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 var MAX_ARTIFACT_BYTES = 2 * 1024 * 1024;
 var MAX_TRACE_SUMMARY_CHARS = 800;
@@ -31925,6 +31944,7 @@ function rowToRun(row) {
     schemaVersion: "1.0",
     repositoryRoot: row.repository_root,
     requestedMode: row.requested_mode,
+    topology: row.topology ?? "standard",
     status: row.status,
     phase: row.phase,
     resumePhase: row.resume_phase,
@@ -31934,6 +31954,8 @@ function rowToRun(row) {
       postExecutionRemediationsRemaining: row.remediations_remaining
     },
     outcomeHint: row.outcome_hint,
+    escalationCount: row.escalation_count ?? 0,
+    priorRunId: row.prior_run_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -31958,18 +31980,18 @@ var SqliteLedger = class {
   database;
   constructor(rootDirectory) {
     this.rootDirectory = resolve3(rootDirectory);
-    this.databasePath = join(this.rootDirectory, "ledger.sqlite3");
-    this.blobDirectory = join(this.rootDirectory, "blobs", "sha256");
-    if (existsSync(this.rootDirectory) && lstatSync(this.rootDirectory).isSymbolicLink()) {
+    this.databasePath = join2(this.rootDirectory, "ledger.sqlite3");
+    this.blobDirectory = join2(this.rootDirectory, "blobs", "sha256");
+    if (existsSync2(this.rootDirectory) && lstatSync(this.rootDirectory).isSymbolicLink()) {
       throw new Error("Telic state directory must not be a symbolic link");
     }
-    mkdirSync(this.rootDirectory, { recursive: true, mode: 448 });
+    mkdirSync2(this.rootDirectory, { recursive: true, mode: 448 });
     const rootInfo = lstatSync(this.rootDirectory);
     if (!rootInfo.isDirectory() || rootInfo.isSymbolicLink()) {
       throw new Error("Telic state path must be a private directory");
     }
     chmodSync(this.rootDirectory, 448);
-    if (existsSync(this.databasePath)) {
+    if (existsSync2(this.databasePath)) {
       const databaseInfo = lstatSync(this.databasePath);
       if (!databaseInfo.isFile() || databaseInfo.isSymbolicLink()) {
         throw new Error("Telic ledger path must be a regular file");
@@ -31982,14 +32004,14 @@ var SqliteLedger = class {
       `${this.databasePath}-wal`,
       `${this.databasePath}-shm`
     ]) {
-      if (existsSync(sidecarPath)) {
+      if (existsSync2(sidecarPath)) {
         const sidecarInfo = lstatSync(sidecarPath);
         if (!sidecarInfo.isFile() || sidecarInfo.isSymbolicLink()) {
           throw new Error("Telic ledger sidecars must be regular files");
         }
       }
     }
-    const blobRoot = join(this.rootDirectory, "blobs");
+    const blobRoot = join2(this.rootDirectory, "blobs");
     this.ensurePrivateDirectory(blobRoot, "Telic blob root");
     this.ensurePrivateDirectory(this.blobDirectory, "Telic blob path");
     this.assertBlobBoundary();
@@ -32002,6 +32024,7 @@ var SqliteLedger = class {
         schema_version TEXT NOT NULL,
         repository_root TEXT NOT NULL,
         requested_mode TEXT NOT NULL,
+        topology TEXT NOT NULL DEFAULT 'standard',
         status TEXT NOT NULL,
         phase TEXT NOT NULL,
         resume_phase TEXT,
@@ -32009,6 +32032,8 @@ var SqliteLedger = class {
         prompt_revisions_remaining INTEGER NOT NULL CHECK(prompt_revisions_remaining >= 0),
         remediations_remaining INTEGER NOT NULL CHECK(remediations_remaining >= 0),
         outcome_hint TEXT,
+        escalation_count INTEGER NOT NULL DEFAULT 0,
+        prior_run_id TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       ) STRICT;
@@ -32042,6 +32067,16 @@ var SqliteLedger = class {
       ) STRICT;
       CREATE INDEX IF NOT EXISTS events_run_idx ON trace_events(run_id, sequence);
     `);
+    const runColumns = this.database.prepare("PRAGMA table_info(runs)").all();
+    if (!runColumns.some((column) => column.name === "topology")) {
+      this.database.exec("ALTER TABLE runs ADD COLUMN topology TEXT NOT NULL DEFAULT 'standard'");
+    }
+    if (!runColumns.some((column) => column.name === "prior_run_id")) {
+      this.database.exec("ALTER TABLE runs ADD COLUMN prior_run_id TEXT");
+    }
+    if (!runColumns.some((column) => column.name === "escalation_count")) {
+      this.database.exec("ALTER TABLE runs ADD COLUMN escalation_count INTEGER NOT NULL DEFAULT 0");
+    }
     const traceColumns = this.database.prepare("PRAGMA table_info(trace_events)").all();
     if (!traceColumns.some((column) => column.name === "permission_decision_json")) {
       this.database.exec("ALTER TABLE trace_events ADD COLUMN permission_decision_json TEXT");
@@ -32104,10 +32139,10 @@ var SqliteLedger = class {
   }
   insertRun(run) {
     this.database.prepare(`INSERT INTO runs (
-        run_id, schema_version, repository_root, requested_mode, status, phase,
+        run_id, schema_version, repository_root, requested_mode, topology, status, phase,
         resume_phase, version, prompt_revisions_remaining, remediations_remaining,
-        outcome_hint, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(run.runId, run.schemaVersion, run.repositoryRoot, run.requestedMode, run.status, run.phase, run.resumePhase, run.version, run.budgets.promptRevisionsRemaining, run.budgets.postExecutionRemediationsRemaining, run.outcomeHint, run.createdAt, run.updatedAt);
+        outcome_hint, escalation_count, prior_run_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(run.runId, run.schemaVersion, run.repositoryRoot, run.requestedMode, run.topology, run.status, run.phase, run.resumePhase, run.version, run.budgets.promptRevisionsRemaining, run.budgets.postExecutionRemediationsRemaining, run.outcomeHint, run.escalationCount, run.priorRunId, run.createdAt, run.updatedAt);
   }
   getRun(runId) {
     const row = this.database.prepare("SELECT * FROM runs WHERE run_id = ?").get(runId);
@@ -32125,16 +32160,20 @@ var SqliteLedger = class {
       throw new Error(`Run not found: ${runId}`);
     return run;
   }
-  applySubmission(expectedVersion, nextRun, artifact, event, additionalEvents = []) {
+  applySubmission(expectedVersion, nextRun, artifact, event, additionalEvents = [], companionArtifacts = []) {
     this.assertArtifactSlot(artifact.runId, artifact.id);
     const stored = this.prepareArtifact(artifact);
     this.database.exec("BEGIN IMMEDIATE");
     try {
       this.insertPreparedArtifact(stored);
+      for (const companion of companionArtifacts) {
+        this.assertArtifactSlot(companion.runId, companion.id);
+        this.insertPreparedArtifact(this.prepareArtifact(companion));
+      }
       const updated = this.database.prepare(`UPDATE runs SET
           status = ?, phase = ?, resume_phase = ?, version = ?,
           prompt_revisions_remaining = ?, remediations_remaining = ?, outcome_hint = ?,
-          updated_at = ? WHERE run_id = ? AND version = ?`).run(nextRun.status, nextRun.phase, nextRun.resumePhase, nextRun.version, nextRun.budgets.promptRevisionsRemaining, nextRun.budgets.postExecutionRemediationsRemaining, nextRun.outcomeHint, nextRun.updatedAt, nextRun.runId, expectedVersion);
+          topology = ?, escalation_count = ?, prior_run_id = ?, updated_at = ? WHERE run_id = ? AND version = ?`).run(nextRun.status, nextRun.phase, nextRun.resumePhase, nextRun.version, nextRun.budgets.promptRevisionsRemaining, nextRun.budgets.postExecutionRemediationsRemaining, nextRun.outcomeHint, nextRun.topology, nextRun.escalationCount, nextRun.priorRunId, nextRun.updatedAt, nextRun.runId, expectedVersion);
       if (Number(updated.changes) !== 1) {
         throw new Error("Concurrent run update detected; reload and retry with the latest version");
       }
@@ -32213,7 +32252,7 @@ var SqliteLedger = class {
       const updated = this.database.prepare(`UPDATE runs SET
           status = ?, phase = ?, resume_phase = ?, version = ?,
           prompt_revisions_remaining = ?, remediations_remaining = ?, outcome_hint = ?,
-          updated_at = ? WHERE run_id = ? AND version = ?`).run(nextRun.status, nextRun.phase, nextRun.resumePhase, nextRun.version, nextRun.budgets.promptRevisionsRemaining, nextRun.budgets.postExecutionRemediationsRemaining, nextRun.outcomeHint, nextRun.updatedAt, nextRun.runId, expectedVersion);
+          topology = ?, escalation_count = ?, prior_run_id = ?, updated_at = ? WHERE run_id = ? AND version = ?`).run(nextRun.status, nextRun.phase, nextRun.resumePhase, nextRun.version, nextRun.budgets.promptRevisionsRemaining, nextRun.budgets.postExecutionRemediationsRemaining, nextRun.outcomeHint, nextRun.topology, nextRun.escalationCount, nextRun.priorRunId, nextRun.updatedAt, nextRun.runId, expectedVersion);
       if (Number(updated.changes) !== 1)
         throw new Error("Concurrent run update detected");
       this.insertEvent(nextRun, event);
@@ -32275,19 +32314,19 @@ var SqliteLedger = class {
     const sha2563 = sha256Json(artifact.body);
     const path = this.blobPath(sha2563);
     this.assertBlobBoundary();
-    mkdirSync(dirname(path), { recursive: true, mode: 448 });
+    mkdirSync2(dirname(path), { recursive: true, mode: 448 });
     const prefixInfo = lstatSync(dirname(path));
     if (!prefixInfo.isDirectory() || prefixInfo.isSymbolicLink()) {
       throw new Error("Artifact blob prefix must be a private directory");
     }
-    if (existsSync(path)) {
+    if (existsSync2(path)) {
       const existingInfo = lstatSync(path);
       if (!existingInfo.isFile() || existingInfo.isSymbolicLink()) {
         throw new Error("Artifact blob path must be a regular file");
       }
     } else {
       const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
-      writeFileSync(temporary, json2, {
+      writeFileSync2(temporary, json2, {
         encoding: "utf8",
         mode: 384,
         flag: "wx"
@@ -32296,7 +32335,7 @@ var SqliteLedger = class {
         renameSync(temporary, path);
       } catch (error51) {
         rmSync(temporary, { force: true });
-        if (!existsSync(path))
+        if (!existsSync2(path))
           throw error51;
       }
       chmodSync(path, 384);
@@ -32334,7 +32373,7 @@ var SqliteLedger = class {
     if (!blobInfo.isFile() || blobInfo.isSymbolicLink()) {
       throw new Error("Stored artifact blob must be a regular file");
     }
-    const bodyText = readFileSync(path, "utf8");
+    const bodyText = readFileSync2(path, "utf8");
     const body = JSON.parse(bodyText);
     const computed = sha256Json(body);
     if (computed !== artifact.sha256 && computed.slice("sha256:".length) !== artifact.sha256)
@@ -32392,16 +32431,16 @@ var SqliteLedger = class {
     if (!/^[a-f0-9]{64}$/u.test(digest)) {
       throw new Error("Stored artifact digest is malformed");
     }
-    return join(this.blobDirectory, digest.slice(0, 2), digest.slice(2));
+    return join2(this.blobDirectory, digest.slice(0, 2), digest.slice(2));
   }
   ensurePrivateDirectory(path, label) {
-    if (existsSync(path)) {
+    if (existsSync2(path)) {
       const info2 = lstatSync(path);
       if (!info2.isDirectory() || info2.isSymbolicLink()) {
         throw new Error(`${label} must not be a symbolic link`);
       }
     } else {
-      mkdirSync(path, { mode: 448 });
+      mkdirSync2(path, { mode: 448 });
     }
     const info = lstatSync(path);
     if (!info.isDirectory() || info.isSymbolicLink()) {
@@ -32410,7 +32449,7 @@ var SqliteLedger = class {
     chmodSync(path, 448);
   }
   assertBlobBoundary() {
-    const blobRoot = join(this.rootDirectory, "blobs");
+    const blobRoot = join2(this.rootDirectory, "blobs");
     for (const [path, label] of [
       [blobRoot, "Telic blob root"],
       [this.blobDirectory, "Telic blob path"]
@@ -32428,7 +32467,7 @@ var SqliteLedger = class {
 };
 
 // packages/core/dist/permissions.js
-import { existsSync as existsSync2, realpathSync as realpathSync2 } from "node:fs";
+import { existsSync as existsSync3, realpathSync as realpathSync2 } from "node:fs";
 import { isIP } from "node:net";
 import { dirname as dirname2, isAbsolute as isAbsolute4, relative as relative4, resolve as resolve4, sep as sep4 } from "node:path";
 import { matchesGlob } from "node:path";
@@ -32478,10 +32517,10 @@ function safeRelativeTarget(repositoryRoot, target) {
   const absoluteTarget = isAbsolute4(target) ? resolve4(target) : resolve4(repositoryRoot, target);
   const relativeTarget = relative4(resolve4(repositoryRoot), absoluteTarget);
   if (relativeTarget === "" || !relativeTarget.startsWith("..") && !isAbsolute4(relativeTarget)) {
-    if (existsSync2(repositoryRoot)) {
+    if (existsSync3(repositoryRoot)) {
       const canonicalRoot = realpathSync2(repositoryRoot);
       let existingAncestor = absoluteTarget;
-      while (!existsSync2(existingAncestor)) {
+      while (!existsSync3(existingAncestor)) {
         const parent = dirname2(existingAncestor);
         if (parent === existingAncestor)
           return null;
@@ -32645,6 +32684,531 @@ function projectPermissions(mode2) {
   };
 }
 
+// packages/core/dist/classify-run.js
+var ELEVATED_CAPABILITIES = /* @__PURE__ */ new Set([
+  "repository.write",
+  "repository.delete",
+  "shell.execute",
+  "runtime.restart",
+  "browser.mutate",
+  "external.write",
+  "subagent.spawn"
+]);
+var COMPLEXITY_PATTERN = /\b(refactor|migrate|architecture|security audit|across (the )?codebase|multi-?file)\b/i;
+var DIVERGENCE_PATTERN = /\b(either|or both|unclear|not sure|choose between)\b/i;
+function forensicSignals(input) {
+  const signals = [];
+  if (input.requestedMode === "analyze_and_fix")
+    signals.push("ANALYZE_AND_FIX");
+  if (input.granted.some((cap) => ELEVATED_CAPABILITIES.has(cap))) {
+    signals.push("ELEVATED_CAPABILITY");
+  }
+  if ((input.networkReadDomains?.length ?? 0) > 0)
+    signals.push("NETWORK_READ");
+  if ((input.shellExecuteAllowlist?.length ?? 0) > 0) {
+    signals.push("SHELL_EXECUTE_ALLOWLIST");
+  }
+  const trimmed = input.originalRequest.trim();
+  if (trimmed.length > 512 || trimmed.split("\n").length > 12) {
+    signals.push("LONG_REQUEST");
+  }
+  if (COMPLEXITY_PATTERN.test(trimmed))
+    signals.push("COMPLEXITY_KEYWORD");
+  return signals.sort();
+}
+var SINGLE_FILE_PATH = /\b(?:[\w.-]+\/)*[\w.-]+\.(?:ts|tsx|js|jsx|md|json|css|html|py|rs|go)\b/i;
+function passesMicroFixGate(input) {
+  if (input.requestedMode !== "fix_only")
+    return false;
+  const trimmed = input.originalRequest.trim();
+  if (trimmed.length > 200 || trimmed.split("\n").length > 5)
+    return false;
+  if (DIVERGENCE_PATTERN.test(trimmed))
+    return false;
+  if (COMPLEXITY_PATTERN.test(trimmed))
+    return false;
+  const granted = new Set(input.granted);
+  if (!granted.has("repository.read") || !granted.has("repository.write")) {
+    return false;
+  }
+  for (const capability2 of granted) {
+    if (capability2 !== "repository.read" && capability2 !== "repository.write") {
+      return false;
+    }
+  }
+  const paths = trimmed.match(SINGLE_FILE_PATH) ?? [];
+  const uniquePaths = [...new Set(paths.map((path) => path.toLowerCase()))];
+  return uniquePaths.length === 1;
+}
+function passesMicroGate(input) {
+  const trimmed = input.originalRequest.trim();
+  if (input.requestedMode !== "report_only")
+    return false;
+  if (trimmed.length > 200 || trimmed.split("\n").length > 5)
+    return false;
+  if (DIVERGENCE_PATTERN.test(trimmed))
+    return false;
+  if (input.granted.some((cap) => cap !== "repository.read"))
+    return false;
+  return true;
+}
+function classifyRun(input) {
+  const forensic = forensicSignals(input);
+  if (input.topologyOverride) {
+    if (input.topologyOverride === "micro") {
+      const microEligible = passesMicroGate(input) || passesMicroFixGate(input);
+      if (forensic.length > 0 || !microEligible) {
+        throw new Error("topologyOverride micro is incompatible with the current request signals");
+      }
+      return {
+        topology: "micro",
+        rationaleCode: passesMicroFixGate(input) ? "MICRO_SHORT_FIX_ONLY" : "MICRO_SHORT_REPORT_ONLY",
+        signals: [
+          passesMicroFixGate(input) ? "MICRO_SHORT_FIX_ONLY" : "MICRO_SHORT_REPORT_ONLY"
+        ]
+      };
+    }
+    if (input.topologyOverride === "standard" && forensic.length > 0) {
+      throw new Error("topologyOverride standard is incompatible with forensic classification signals");
+    }
+    const signal = input.topologyOverride === "forensic" ? "OVERRIDE_FORENSIC" : "OVERRIDE_STANDARD";
+    return {
+      topology: input.topologyOverride,
+      rationaleCode: signal,
+      signals: [signal, ...forensic].sort()
+    };
+  }
+  if (input.requestedMode === "fix_only" && passesMicroFixGate(input)) {
+    return {
+      topology: "micro",
+      rationaleCode: "MICRO_SHORT_FIX_ONLY",
+      signals: ["MICRO_SHORT_FIX_ONLY"]
+    };
+  }
+  if (forensic.length > 0) {
+    return {
+      topology: "forensic",
+      rationaleCode: forensic[0],
+      signals: forensic
+    };
+  }
+  if (input.requestedMode === "analyze_only" && input.granted.some((cap) => ["runtime.inspect", "browser.inspect", "shell.inspect"].includes(cap))) {
+    return {
+      topology: "standard",
+      rationaleCode: "INVESTIGATIVE_MODE",
+      signals: ["INVESTIGATIVE_MODE"]
+    };
+  }
+  if (input.requestedMode === "plan_only") {
+    return {
+      topology: "standard",
+      rationaleCode: "PLAN_ONLY",
+      signals: ["PLAN_ONLY"]
+    };
+  }
+  if (input.requestedMode === "fix_only") {
+    return {
+      topology: "standard",
+      rationaleCode: "FIX_ONLY",
+      signals: ["FIX_ONLY"]
+    };
+  }
+  if (passesMicroGate(input)) {
+    return {
+      topology: "micro",
+      rationaleCode: "MICRO_SHORT_REPORT_ONLY",
+      signals: ["MICRO_SHORT_REPORT_ONLY"]
+    };
+  }
+  return {
+    topology: "standard",
+    rationaleCode: "DEFAULT_STANDARD",
+    signals: ["DEFAULT_STANDARD"]
+  };
+}
+
+// packages/core/dist/escalation.js
+var MAX_ESCALATIONS_PER_RUN = 2;
+function escalateTopology(run, target, phase, reason) {
+  if (run.topology === target) {
+    throw new Error(`Run is already on ${target} topology`);
+  }
+  if (run.topology === "forensic" && target !== "forensic") {
+    throw new Error("Forensic topology cannot be downgraded");
+  }
+  if (run.escalationCount >= MAX_ESCALATIONS_PER_RUN) {
+    throw new Error("escalation budget exhausted");
+  }
+  return {
+    run: {
+      ...run,
+      topology: target,
+      phase,
+      status: "running",
+      resumePhase: null,
+      escalationCount: run.escalationCount + 1
+    },
+    reason
+  };
+}
+function evaluateEscalation(run, submission) {
+  const body = submission.body;
+  if (run.topology === "micro" && submission.type === "UserReport") {
+    const claims = Array.isArray(body.completionClaims) ? body.completionClaims : [];
+    if (claims.some((claim) => claim.status === "user_reported")) {
+      return {
+        targetTopology: "standard",
+        phase: "agent_1_review",
+        reason: "MICRO_USER_REPORTED"
+      };
+    }
+  }
+  if (run.topology === "standard" && submission.type === "ReleaseAudit") {
+    const matrix = Array.isArray(body.claimEvidenceMatrix) ? body.claimEvidenceMatrix : [];
+    if (matrix.some((entry) => entry.basis === "user_reported")) {
+      return {
+        targetTopology: "forensic",
+        phase: "agent_5_audit",
+        reason: "STANDARD_USER_REPORTED_CLAIMS"
+      };
+    }
+  }
+  return null;
+}
+function escalationReasonForQualityReview(decision) {
+  return decision === "remediate" ? "MICRO_SPOT_REMEDIATE" : "MICRO_SPOT_PARTIAL";
+}
+
+// packages/core/dist/certify-run.js
+import { createHash as createHash4 } from "node:crypto";
+var ARTIFACT_REF_PATTERN = /^artifact:\/\/([^/]+)\/([A-Za-z0-9._-]+)$/u;
+function parseArtifactRef(ref) {
+  const match = ARTIFACT_REF_PATTERN.exec(ref);
+  if (!match)
+    return null;
+  return { runId: match[1], artifactId: match[2] };
+}
+function verifyEvidenceDigest(ledger, runId, ref) {
+  const parsed = parseArtifactRef(ref);
+  if (!parsed || parsed.runId !== runId)
+    return false;
+  try {
+    const artifact = ledger.getArtifact(parsed.runId, parsed.artifactId);
+    if (!artifact)
+      return false;
+    const recomputed = sha256Json(artifact.body);
+    return recomputed === artifact.sha256 || recomputed.slice("sha256:".length) === artifact.sha256;
+  } catch {
+    return false;
+  }
+}
+function collectEvidenceRefs(review) {
+  const refs = /* @__PURE__ */ new Set();
+  const sections = [
+    review.acceptanceResults,
+    review.verificationResults,
+    review.hardGates,
+    review.ruleCompliance,
+    review.regressionChecks
+  ];
+  for (const section of sections) {
+    if (!Array.isArray(section))
+      continue;
+    for (const entry of section) {
+      if (typeof entry !== "object" || entry === null)
+        continue;
+      const evidenceRefs = entry.evidenceRefs;
+      if (!Array.isArray(evidenceRefs))
+        continue;
+      for (const ref of evidenceRefs) {
+        if (typeof ref === "string")
+          refs.add(ref);
+      }
+    }
+  }
+  return [...refs];
+}
+function buildMatrixFromReview(review, runId, ledger) {
+  const acceptanceResults = Array.isArray(review.acceptanceResults) ? review.acceptanceResults : [];
+  const entries = [];
+  for (const [index, result] of acceptanceResults.entries()) {
+    if (typeof result !== "object" || result === null)
+      continue;
+    const criterionId = typeof result.criterionId === "string" ? result.criterionId : `AC-${String(index + 1)}`;
+    const status = result.status === "pass" ? "supported" : "unverified";
+    const evidenceRefs = Array.isArray(result.evidenceRefs) ? result.evidenceRefs ?? [] : [];
+    const rationaleSummary = typeof result.rationaleSummary === "string" ? result.rationaleSummary : "Spot-check evidence receipt.";
+    const digestOk = evidenceRefs.every((ref) => verifyEvidenceDigest(ledger, runId, ref));
+    entries.push({
+      claimId: `claim-${criterionId}`,
+      claim: `Criterion ${criterionId} spot-check claim`,
+      criterionIds: [criterionId],
+      basis: "direct",
+      status: digestOk && status === "supported" ? "supported" : "unverified",
+      evidenceRefs,
+      rationaleSummary
+    });
+  }
+  return entries;
+}
+function certifyRun(ledger, runId, qualityReview) {
+  const claimEvidenceMatrix = buildMatrixFromReview(qualityReview, runId, ledger);
+  const verifiedEvidenceRefs = [];
+  let digestStatus = "verified";
+  for (const ref of collectEvidenceRefs(qualityReview)) {
+    if (verifyEvidenceDigest(ledger, runId, ref)) {
+      verifiedEvidenceRefs.push(ref);
+      continue;
+    }
+    digestStatus = "failed";
+  }
+  if (digestStatus === "verified" && claimEvidenceMatrix.some((entry) => entry.status !== "supported")) {
+    digestStatus = "failed";
+  }
+  return {
+    digestStatus,
+    claimEvidenceMatrix,
+    verifiedEvidenceRefs
+  };
+}
+function digestSummaryForRefs(refs) {
+  const digest = createHash4("sha256").update(refs.slice().sort().join("|")).digest("hex");
+  return `sha256:${digest}`;
+}
+
+// packages/core/dist/contract-delta.js
+function latestBody(artifacts, type) {
+  const record2 = [...artifacts].reverse().find((artifact) => artifact.type === type);
+  if (!record2 || typeof record2.body !== "object" || record2.body === null) {
+    return null;
+  }
+  return record2.body;
+}
+function buildContractDelta(priorRun, priorArtifacts) {
+  const problemFrame = latestBody(priorArtifacts, "ProblemFrame");
+  const taskContract = latestBody(priorArtifacts, "TaskContract");
+  const userReport = latestBody(priorArtifacts, "UserReport");
+  const inheritedCriterionIds = Array.isArray(taskContract?.acceptanceCriteria) ? taskContract.acceptanceCriteria.map((criterion) => typeof criterion.id === "string" ? criterion.id : null).filter((id2) => id2 !== null) : [];
+  const inheritedEvidenceRefs = [];
+  if (Array.isArray(userReport?.completionClaims)) {
+    for (const claim of userReport.completionClaims) {
+      if (!Array.isArray(claim.evidenceRefs))
+        continue;
+      for (const ref of claim.evidenceRefs) {
+        if (typeof ref === "string")
+          inheritedEvidenceRefs.push(ref);
+      }
+    }
+  }
+  const scope = typeof problemFrame?.scope === "object" && problemFrame.scope !== null ? problemFrame.scope : null;
+  return {
+    objective: typeof problemFrame?.goal === "string" ? problemFrame.goal : null,
+    scope,
+    inheritedCriterionIds,
+    inheritedEvidenceRefs,
+    priorProblemFrameRef: problemFrame ? `artifact://${priorRun.runId}/${String(problemFrame.id)}` : null,
+    priorTaskContractRef: taskContract ? `artifact://${priorRun.runId}/${String(taskContract.id)}` : null,
+    priorUserReportRef: userReport ? `artifact://${priorRun.runId}/${String(userReport.id)}` : null
+  };
+}
+
+// packages/core/dist/evidence-oracle.js
+var ARTIFACT_REF_PATTERN2 = /^artifact:\/\/([^/]+)\/([A-Za-z0-9._-]+)$/u;
+function parseArtifactRef2(ref) {
+  const match = ARTIFACT_REF_PATTERN2.exec(ref);
+  if (!match)
+    return null;
+  return { runId: match[1], artifactId: match[2] };
+}
+function validateCrossRunEvidenceRef(ledger, currentRun, ref, priorRunId) {
+  const parsed = parseArtifactRef2(ref);
+  if (!parsed) {
+    throw new Error(`Cross-run evidence ref is not an artifact URI: ${ref}`);
+  }
+  if (parsed.runId !== priorRunId) {
+    throw new Error(`Cross-run evidence ref must target prior run ${priorRunId}`);
+  }
+  const priorRun = ledger.getRun(priorRunId);
+  if (!priorRun) {
+    throw new Error(`Prior run ${priorRunId} does not exist`);
+  }
+  if (priorRun.repositoryRoot !== currentRun.repositoryRoot) {
+    throw new Error("Cross-run evidence requires the same repository root as the prior run");
+  }
+  const artifact = ledger.getArtifact(priorRunId, parsed.artifactId);
+  if (!artifact) {
+    throw new Error(`Cross-run evidence artifact does not exist: ${ref}`);
+  }
+  if (artifact.type !== "Evidence") {
+    throw new Error(`Cross-run evidence ref must target an Evidence artifact: ${ref}`);
+  }
+}
+function collectCrossRunEvidenceRefs(value) {
+  const refs = [];
+  const visit = (node) => {
+    if (typeof node === "string" && node.startsWith("artifact://")) {
+      refs.push(node);
+      return;
+    }
+    if (Array.isArray(node)) {
+      for (const item of node)
+        visit(item);
+      return;
+    }
+    if (typeof node === "object" && node !== null) {
+      for (const item of Object.values(node))
+        visit(item);
+    }
+  };
+  visit(value);
+  return refs;
+}
+
+// packages/core/dist/micro-bootstrap.js
+function buildMicroExecutionPack(run, problemFrame, contextManifestRef, originalRequestRef, envelope) {
+  const contractId = "contract-01";
+  const planId = "plan-01";
+  const problemFrameRef = `artifact://${run.runId}/${problemFrame.id}`;
+  const criterion = problemFrame.draftAcceptanceCriteria[0];
+  if (!criterion) {
+    throw new Error("Micro bootstrap requires one draft acceptance criterion");
+  }
+  const requiredContextRefs = /* @__PURE__ */ new Set();
+  for (const fact of problemFrame.knownFacts ?? []) {
+    if (fact.provenance !== "user" && typeof fact.sourceRef === "string") {
+      requiredContextRefs.add(fact.sourceRef);
+    }
+  }
+  for (const inference of problemFrame.inferences ?? []) {
+    for (const ref of inference.sourceRefs ?? [])
+      requiredContextRefs.add(ref);
+  }
+  if (contextManifestRef)
+    requiredContextRefs.add(contextManifestRef);
+  const sourceRefs = [
+    problemFrameRef,
+    ...contextManifestRef ? [contextManifestRef] : []
+  ];
+  const executes = run.requestedMode === "fix_only" || run.requestedMode === "analyze_only";
+  const contractBody = {
+    schemaVersion: "1.0",
+    id: contractId,
+    runId: run.runId,
+    version: 1,
+    originalRequestRef,
+    problemFrameRef,
+    intentMode: run.requestedMode,
+    objective: problemFrame.goal,
+    scope: problemFrame.scope,
+    constraints: problemFrame.constraints,
+    nonGoals: problemFrame.nonGoals,
+    contextRefs: [...requiredContextRefs],
+    ruleRefs: problemFrame.applicableRuleRefs,
+    permissions: envelope.authorization.granted,
+    acceptanceCriteria: [criterion],
+    requiredOutputs: executes ? ["Evidence-backed work result"] : ["Evidence-backed answer"],
+    verificationRequirements: executes ? [
+      {
+        id: "VR-MICRO",
+        stage: "completion",
+        description: "Capture repository evidence for the bounded micro execution.",
+        required: true,
+        capability: "repository.read",
+        fallback: "Stop if repository evidence cannot be captured."
+      }
+    ] : [],
+    stopConditions: ["Stop within the micro topology scope."],
+    assumptions: [],
+    unresolvedQuestions: [],
+    rationaleSummary: "Controller bootstrap contract for micro topology execution."
+  };
+  const maximumToolCalls = run.requestedMode === "report_only" || run.requestedMode === "plan_only" ? 0 : run.requestedMode === "fix_only" && run.topology === "micro" ? 8 : 32;
+  const allowedTools = run.requestedMode === "fix_only" && run.topology === "micro" ? ["repository.read", "repository.write"] : ["repository.read"];
+  const requiredCapabilities = run.requestedMode === "fix_only" && run.topology === "micro" ? ["repository.read", "repository.write"] : ["repository.read"];
+  const planBody = {
+    schemaVersion: "1.0",
+    id: planId,
+    runId: run.runId,
+    taskContractRef: `artifact://${run.runId}/${contractId}`,
+    executionMode: "serial",
+    nodes: [
+      {
+        id: "micro-execute",
+        logicalRole: "executor",
+        objective: problemFrame.goal,
+        dependsOn: [],
+        inputRefs: [`artifact://${run.runId}/${contractId}`],
+        contextRefs: [...requiredContextRefs],
+        allowedTools,
+        requiredCapabilities,
+        permissions: envelope.authorization.granted,
+        outputType: "WorkResult",
+        acceptanceCriteria: [criterion.id],
+        stopConditions: ["Stop within the micro topology scope."],
+        budgets: { maximumToolCalls, maximumChildren: 0 }
+      }
+    ],
+    joinRules: [],
+    globalBudgets: {
+      maximumToolCalls,
+      maximumParallelWorkers: 1,
+      maximumSubagentDepth: 0
+    },
+    planValidation: "valid",
+    rationaleSummary: "Controller bootstrap serial plan for micro topology."
+  };
+  return [
+    {
+      id: contractId,
+      runId: run.runId,
+      type: "TaskContract",
+      schemaVersion: "1.0",
+      producer: "task_compiler",
+      sourceRefs,
+      body: contractBody
+    },
+    {
+      id: planId,
+      runId: run.runId,
+      type: "WorkPlan",
+      schemaVersion: "1.0",
+      producer: "quality_controller",
+      sourceRefs: [`artifact://${run.runId}/${contractId}`],
+      body: planBody
+    }
+  ];
+}
+
+// packages/core/dist/topology.js
+var roleByPhase = {
+  context_grounding: "controller",
+  agent_1_frame: "scenario_author",
+  agent_2_compile: "task_compiler",
+  agent_1_review: "scenario_author",
+  agent_2_revise: "task_compiler",
+  agent_3_plan: "quality_controller",
+  agent_4_execute: "executor",
+  agent_3_review: "quality_controller",
+  agent_3_evidence_reverify: "quality_controller",
+  agent_5_audit: "release_auditor",
+  agent_5_report: "release_auditor"
+};
+function instructionRefFor(run) {
+  if (run.topology === "micro" && run.phase === "agent_1_frame") {
+    return "artifact://system/roles/scenario_author-micro-v1";
+  }
+  if (run.topology === "micro" && run.phase === "agent_3_review") {
+    return "artifact://system/roles/quality_controller-spot-v1";
+  }
+  if (run.topology === "forensic" && run.phase === "agent_3_evidence_reverify") {
+    return "artifact://system/roles/quality_controller-reverify-v1";
+  }
+  return `artifact://system/roles/${roleByPhase[run.phase]}-v1`;
+}
+function isMicroBootstrapTransition(previous, next) {
+  return previous.topology === "micro" && previous.phase === "agent_1_frame" && (next.phase === "agent_4_execute" || next.phase === "agent_3_review");
+}
+
 // packages/core/dist/state-machine.js
 var TransitionError = class extends Error {
   constructor(message) {
@@ -32652,7 +33216,7 @@ var TransitionError = class extends Error {
     this.name = "TransitionError";
   }
 };
-var expectedByPhase = {
+var standardExpectedByPhase = {
   context_grounding: ["ContextManifest", "ClarificationRequest"],
   agent_1_frame: ["ProblemFrame", "ClarificationRequest"],
   agent_2_compile: ["TaskContract", "ClarificationRequest"],
@@ -32661,11 +33225,15 @@ var expectedByPhase = {
   agent_3_plan: ["WorkPlan", "ClarificationRequest"],
   agent_4_execute: ["WorkResult", "ClarificationRequest"],
   agent_3_review: ["QualityReview", "ClarificationRequest"],
+  agent_3_evidence_reverify: ["QualityReview", "ClarificationRequest"],
   agent_5_audit: ["ReleaseAudit"],
   agent_5_report: ["UserReport"]
 };
+function expectedByPhase(phase, topology) {
+  return [...standardExpectedByPhase[phase]];
+}
 function requiredArtifactTypes(run) {
-  return [...expectedByPhase[run.phase]];
+  return expectedByPhase(run.phase, run.topology);
 }
 function decisionFrom(body) {
   if (typeof body !== "object" || body === null || !("decision" in body)) {
@@ -32700,8 +33268,8 @@ function advanceRun(run, artifact, options = {}) {
   if (artifact.runId !== run.runId) {
     throw new TransitionError("Artifact belongs to a different run");
   }
-  if (!expectedByPhase[run.phase].includes(artifact.type)) {
-    throw new TransitionError(`Phase ${run.phase} requires ${expectedByPhase[run.phase].join(" or ")}; received ${artifact.type}`);
+  if (!expectedByPhase(run.phase, run.topology).includes(artifact.type)) {
+    throw new TransitionError(`Phase ${run.phase} requires ${expectedByPhase(run.phase, run.topology).join(" or ")}; received ${artifact.type}`);
   }
   if (artifact.type === "ClarificationRequest") {
     return {
@@ -32717,12 +33285,21 @@ function advanceRun(run, artifact, options = {}) {
         summary: "Repository context was grounded; framing is next.",
         budgetConsumed: null
       };
-    case "agent_1_frame":
+    case "agent_1_frame": {
+      if (run.topology === "micro") {
+        const nextPhase = run.requestedMode === "report_only" || run.requestedMode === "plan_only" ? "agent_3_review" : "agent_4_execute";
+        return {
+          run: move(run, nextPhase),
+          summary: nextPhase === "agent_3_review" ? "Problem frame accepted; micro spot-check is next." : "Problem frame accepted; micro execution is next.",
+          budgetConsumed: null
+        };
+      }
       return {
         run: move(run, "agent_2_compile"),
         summary: "Problem frame accepted; task compilation is next.",
         budgetConsumed: null
       };
+    }
     case "agent_2_compile":
     case "agent_2_revise":
       return {
@@ -32795,6 +33372,32 @@ function advanceRun(run, artifact, options = {}) {
       };
     case "agent_3_review": {
       const decision = decisionFrom(artifact.body);
+      if (run.topology === "micro") {
+        if (decision === "proceed_to_fix") {
+          throw new TransitionError("Micro topology does not support proceed_to_fix");
+        }
+        if (decision === "pass" || decision === "block") {
+          return {
+            run: {
+              ...move(run, "agent_5_report"),
+              outcomeHint: decision === "pass" ? run.outcomeHint : "blocked"
+            },
+            summary: `Micro spot-check recorded ${decision}; final report is next.`,
+            budgetConsumed: null
+          };
+        }
+        if (decision === "partial" || decision === "remediate") {
+          return {
+            run: {
+              ...move(run, "agent_1_review"),
+              topology: "standard"
+            },
+            summary: decision === "remediate" ? "MICRO_SPOT_REMEDIATE: micro spot-check escalated to standard contract review." : "MICRO_SPOT_PARTIAL: micro spot-check escalated to standard contract review.",
+            budgetConsumed: null
+          };
+        }
+        throw new TransitionError(`Unsupported QualityReview decision: ${decision}`);
+      }
       if (decision === "proceed_to_fix") {
         if (run.requestedMode !== "analyze_and_fix") {
           throw new TransitionError("Only analyze_and_fix may progress from diagnosis to a fix plan");
@@ -32806,12 +33409,13 @@ function advanceRun(run, artifact, options = {}) {
         };
       }
       if (decision === "pass" || decision === "partial" || decision === "block") {
+        const nextPhase = run.topology === "forensic" ? "agent_3_evidence_reverify" : "agent_5_audit";
         return {
           run: {
-            ...move(run, "agent_5_audit"),
+            ...move(run, nextPhase),
             outcomeHint: decision === "pass" ? run.outcomeHint : decision === "block" ? "blocked" : "partial"
           },
-          summary: `Quality review recorded ${decision}; independent release audit is next.`,
+          summary: nextPhase === "agent_3_evidence_reverify" ? `Quality review recorded ${decision}; forensic evidence reverify is next.` : `Quality review recorded ${decision}; independent release audit is next.`,
           budgetConsumed: null
         };
       }
@@ -32836,6 +33440,24 @@ function advanceRun(run, artifact, options = {}) {
         };
       }
       throw new TransitionError(`Unsupported QualityReview decision: ${decision}`);
+    }
+    case "agent_3_evidence_reverify": {
+      const decision = decisionFrom(artifact.body);
+      const reviewKind = typeof artifact.body === "object" && artifact.body !== null && "reviewKind" in artifact.body && typeof artifact.body.reviewKind === "string" ? artifact.body.reviewKind : "spot";
+      if (reviewKind !== "evidence_reverify") {
+        throw new TransitionError("Forensic evidence reverify requires reviewKind evidence_reverify");
+      }
+      if (decision === "pass" || decision === "partial" || decision === "block") {
+        return {
+          run: {
+            ...move(run, "agent_5_audit"),
+            outcomeHint: decision === "pass" ? run.outcomeHint : decision === "block" ? "blocked" : "partial"
+          },
+          summary: `Forensic evidence reverify recorded ${decision}; release audit is next.`,
+          budgetConsumed: null
+        };
+      }
+      throw new TransitionError(`Unsupported forensic evidence reverify decision: ${decision}`);
     }
     case "agent_5_audit": {
       const decision = decisionFrom(artifact.body);
@@ -32961,6 +33583,16 @@ var artifactInputsByPhase = {
     "UserMessage",
     "ClarificationRequest"
   ]),
+  agent_3_evidence_reverify: /* @__PURE__ */ new Set([
+    "TaskContract",
+    "WorkPlan",
+    "WorkResult",
+    "Evidence",
+    "QualityReview",
+    "ReleaseAudit",
+    "UserMessage",
+    "ClarificationRequest"
+  ]),
   agent_5_audit: /* @__PURE__ */ new Set([
     "UserMessage",
     "TaskContract",
@@ -32992,6 +33624,7 @@ var protocolPhaseByInternal = {
   agent_3_plan: "agent_3_plan",
   agent_4_execute: "agent_4_execute",
   agent_3_review: "agent_3_quality_review",
+  agent_3_evidence_reverify: "agent_3_evidence_reverify",
   agent_5_audit: "agent_5_release_audit",
   agent_5_report: "user_report"
 };
@@ -33101,7 +33734,7 @@ function explicitPermissionProjection(mode2, envelope) {
   const effective = intersectStructuredPermissions(ceiling, authorization.granted, authorization.denied);
   return effective;
 }
-var roleByPhase = {
+var roleByPhase2 = {
   context_grounding: "controller",
   agent_1_frame: "scenario_author",
   agent_2_compile: "task_compiler",
@@ -33110,6 +33743,7 @@ var roleByPhase = {
   agent_3_plan: "quality_controller",
   agent_4_execute: "executor",
   agent_3_review: "quality_controller",
+  agent_3_evidence_reverify: "quality_controller",
   agent_5_audit: "release_auditor",
   agent_5_report: "release_auditor"
 };
@@ -33233,6 +33867,7 @@ var fixedProducerByType = {
   PromptReview: "scenario_author",
   QualityReview: "quality_controller",
   ReleaseAudit: "release_auditor",
+  ReceiptAudit: "controller",
   RunEnvelope: "controller",
   ScenarioSpec: "scenario_author",
   TaskContract: "task_compiler",
@@ -33243,8 +33878,8 @@ var fixedProducerByType = {
 };
 function expectedProducer(run, type) {
   if (type === "ClarificationRequest")
-    return roleByPhase[run.phase];
-  return fixedProducerByType[type] ?? roleByPhase[run.phase];
+    return roleByPhase2[run.phase];
+  return fixedProducerByType[type] ?? roleByPhase2[run.phase];
 }
 function requireObjectBody(body) {
   if (typeof body !== "object" || body === null || Array.isArray(body)) {
@@ -33406,7 +34041,7 @@ var systemReferenceFields = /* @__PURE__ */ new Set([
   "ruleRefs"
 ]);
 var knownSystemReferencePatterns = [
-  /^artifact:\/\/system\/roles\/(?:controller|scenario[_-]author|task[_-]compiler|quality[_-]controller|executor|release[_-]auditor)-v1$/u,
+  /^artifact:\/\/system\/roles\/(?:controller|scenario[_-]author(?:-micro)?|task[_-]compiler|quality[_-]controller(?:-spot)?|executor|release[_-]auditor)-v1$/u,
   /^artifact:\/\/system\/rubrics\/contract-readiness-v1$/u
 ];
 function isKnownSystemReference(reference) {
@@ -33464,6 +34099,14 @@ var RunController = class {
   }
   startRun(input) {
     assertStartInput(input);
+    const classification = classifyRun({
+      originalRequest: input.originalRequest,
+      requestedMode: input.requestedMode,
+      granted: input.authorization.granted,
+      ...input.authorization.shellExecuteAllowlist !== void 0 ? { shellExecuteAllowlist: input.authorization.shellExecuteAllowlist } : {},
+      ...input.authorization.networkReadDomains !== void 0 ? { networkReadDomains: input.authorization.networkReadDomains } : {},
+      topologyOverride: input.topologyOverride ?? null
+    });
     const now = (/* @__PURE__ */ new Date()).toISOString();
     const runId = randomUUID2();
     const repositoryRoot = realpathSync3(input.repositoryRoot);
@@ -33477,6 +34120,9 @@ var RunController = class {
       schemaVersion: "1.0",
       repositoryRoot,
       requestedMode: input.requestedMode,
+      topology: classification.topology,
+      escalationCount: 0,
+      priorRunId: input.priorRunId ?? null,
       status: "running",
       phase: "context_grounding",
       resumePhase: null,
@@ -33497,6 +34143,7 @@ var RunController = class {
       originalRequestRef: requestRef,
       followupRequestRefs: [],
       requestedMode: input.requestedMode,
+      topology: classification.topology,
       status: "active",
       workingContext: {
         repositoryRoot,
@@ -33545,7 +34192,36 @@ var RunController = class {
         body: envelopeBody
       }
     ];
+    if (run.priorRunId) {
+      const prior = this.ledger.getRun(run.priorRunId);
+      if (!prior) {
+        throw new Error(`Prior run ${run.priorRunId} does not exist`);
+      }
+      if (prior.repositoryRoot !== repositoryRoot) {
+        throw new Error("Prior run repository root mismatch");
+      }
+      if (prior.status !== "completed" && prior.status !== "partial" && prior.status !== "blocked" && prior.status !== "cancelled") {
+        throw new Error("Prior run must be terminal before lineage link");
+      }
+      const priorArtifacts = this.ledger.listArtifacts(run.priorRunId).map((record2) => this.ledger.getArtifact(run.priorRunId, record2.id)).filter((artifact) => artifact !== null);
+      buildContractDelta(prior, priorArtifacts);
+    }
     this.ledger.createRun(run, artifacts);
+    this.ledger.appendTraceEvent(runId, {
+      actor: "controller",
+      eventType: "topology_classified",
+      phase: run.phase,
+      decisionSummary: classification.rationaleCode
+    });
+    if (run.priorRunId) {
+      this.ledger.appendTraceEvent(runId, {
+        actor: "controller",
+        eventType: "lineage_linked",
+        phase: run.phase,
+        decisionSummary: `Linked to prior run ${run.priorRunId}`,
+        inputRefs: [`trace://${run.priorRunId}`]
+      });
+    }
     return { run, nextAction: this.getNextAction(runId) };
   }
   getNextAction(runId) {
@@ -33678,11 +34354,11 @@ var RunController = class {
       id: `action:${runId}:${run.version}`,
       runId,
       createdAt: run.updatedAt,
-      rationaleSummary: `Controller selected ${protocolPhaseByInternal[run.phase]} from immutable run state.`,
+      rationaleSummary: `Controller selected ${protocolPhaseByInternal[run.phase]} for ${run.topology} topology from immutable run state.`,
       kind: "phase",
       phase: protocolPhaseByInternal[run.phase],
-      logicalRole: roleByPhase[run.phase],
-      instructionRef: `artifact://system/roles/${roleByPhase[run.phase]}-v1`,
+      logicalRole: roleByPhase2[run.phase],
+      instructionRef: instructionRefFor(run),
       inputRefs: inputArtifacts.map((artifact) => `artifact://${runId}/${artifact.id}`),
       contextManifestRef: context ? `artifact://${runId}/${context.id}` : null,
       requiredOutputType: requiredArtifactTypes(run)[0],
@@ -33742,6 +34418,23 @@ var RunController = class {
       throw new Error("The resumed phase artifact must cite the exact clarification request and answer");
     }
     this.assertArtifactReferences(normalized);
+    const preEscalation = evaluateEscalation(current, normalized);
+    if (preEscalation && (submission.type === "UserReport" || submission.type === "ReleaseAudit")) {
+      const now2 = (/* @__PURE__ */ new Date()).toISOString();
+      const escalated = escalateTopology(current, preEscalation.targetTopology, preEscalation.phase, preEscalation.reason);
+      this.ledger.transitionWithoutArtifact(current.version, {
+        ...escalated.run,
+        version: current.version + 1,
+        updatedAt: now2
+      }, {
+        actor: "controller",
+        eventType: "topology_escalated",
+        phase: current.phase,
+        decisionSummary: preEscalation.reason,
+        inputRefs: [`artifact://${submission.runId}/${submission.id}`]
+      });
+      throw new Error(`Topology escalated to ${preEscalation.targetTopology} (${preEscalation.reason})`);
+    }
     try {
       this.assertCrossArtifactInvariants(current, normalized);
     } catch (error51) {
@@ -33772,11 +34465,30 @@ var RunController = class {
       ...execution ? { executionComplete: execution.remainingAfterSubmission === 0 } : {}
     });
     const now = (/* @__PURE__ */ new Date()).toISOString();
-    const nextRun = {
+    let nextRun = {
       ...transition.run,
       version: current.version + 1,
       updatedAt: now
     };
+    if (nextRun.topology !== current.topology) {
+      if (current.escalationCount >= MAX_ESCALATIONS_PER_RUN) {
+        throw new Error("escalation budget exhausted");
+      }
+      nextRun = {
+        ...nextRun,
+        escalationCount: current.escalationCount + 1
+      };
+    }
+    let companionArtifacts = [];
+    if (submission.type === "ProblemFrame" && isMicroBootstrapTransition(current, nextRun)) {
+      const contextRecord = this.ledger.findLatestArtifact(submission.runId, "ContextManifest");
+      const contextRef = contextRecord ? `artifact://${submission.runId}/${contextRecord.id}` : null;
+      const envelope = this.latestBody(submission.runId, "RunEnvelope");
+      companionArtifacts = buildMicroExecutionPack(nextRun, body, contextRef, String(envelope.originalRequestRef), envelope).map((artifact) => ({
+        ...artifact,
+        body: this.validateArtifact(artifact.type, artifact.body)
+      }));
+    }
     const event = {
       actor: submission.producer,
       eventType: clarificationBudgetExhausted ? "budget_consumed" : submission.type === "ClarificationRequest" ? "clarification_requested" : "phase_submitted",
@@ -33786,7 +34498,48 @@ var RunController = class {
     };
     const primaryEvent = permissionEvents[0] ?? event;
     const additionalEvents = permissionEvents.length > 0 ? [...permissionEvents.slice(1), event] : [];
-    this.ledger.applySubmission(current.version, nextRun, normalized, primaryEvent, additionalEvents);
+    if ((current.topology === "micro" || current.topology === "standard") && submission.type === "QualityReview" && body.decision === "pass" && !this.latestBody(submission.runId, "ReceiptAudit", false)) {
+      const cert = certifyRun(this.ledger, submission.runId, body);
+      const receiptId = "receipt-01";
+      companionArtifacts.push({
+        id: receiptId,
+        runId: submission.runId,
+        type: "ReceiptAudit",
+        schemaVersion: "1.0",
+        producer: "controller",
+        sourceRefs: [`artifact://${submission.runId}/${submission.id}`],
+        body: this.validateArtifact("ReceiptAudit", {
+          schemaVersion: "1.0",
+          id: receiptId,
+          runId: submission.runId,
+          controllingReviewRef: `artifact://${submission.runId}/${submission.id}`,
+          claimEvidenceMatrix: cert.claimEvidenceMatrix,
+          digestStatus: cert.digestStatus,
+          verifiedAt: now
+        })
+      });
+      if (cert.digestStatus === "verified") {
+        additionalEvents.push({
+          actor: "controller",
+          eventType: "digest_verified",
+          phase: current.phase,
+          decisionSummary: digestSummaryForRefs(cert.verifiedEvidenceRefs),
+          inputRefs: cert.verifiedEvidenceRefs
+        });
+      }
+    }
+    if (current.topology === "micro" && nextRun.topology === "standard" && submission.type === "QualityReview") {
+      const bodyDecision = typeof body.decision === "string" ? body.decision : "";
+      const reason = escalationReasonForQualityReview(bodyDecision);
+      additionalEvents.push({
+        actor: "controller",
+        eventType: "topology_escalated",
+        phase: current.phase,
+        decisionSummary: reason,
+        inputRefs: [`artifact://${submission.runId}/${submission.id}`]
+      });
+    }
+    this.ledger.applySubmission(current.version, nextRun, normalized, primaryEvent, additionalEvents, companionArtifacts);
     return {
       run: nextRun,
       nextAction: this.getNextAction(nextRun.runId)
@@ -33914,6 +34667,19 @@ var RunController = class {
       return;
     }
     if (submission.type === "ProblemFrame") {
+      if (run.topology === "micro") {
+        const draftCriteria = Array.isArray(body.draftAcceptanceCriteria) ? body.draftAcceptanceCriteria : [];
+        const knownFacts2 = Array.isArray(body.knownFacts) ? body.knownFacts : [];
+        if (draftCriteria.length !== 1) {
+          throw new Error("Micro topology requires exactly one draft acceptance criterion");
+        }
+        if (knownFacts2.length > 3) {
+          throw new Error("Micro topology allows at most three known facts");
+        }
+        if (typeof body.clarification === "object" && body.clarification !== null && body.clarification.required === true) {
+          throw new Error("Micro topology cannot require clarification in ProblemFrame");
+        }
+      }
       if (body.intentMode !== run.requestedMode) {
         throw new Error("ProblemFrame intentMode must match the immutable run mode");
       }
@@ -34632,6 +35398,29 @@ var RunController = class {
       }
       const audit = this.latestBody(run.runId, "ReleaseAudit", false);
       if (!audit) {
+        if (run.topology === "micro") {
+          const qualityRef = this.latestRef(run.runId, "QualityReview");
+          const receipt = this.latestBody(run.runId, "ReceiptAudit", false);
+          if (body.terminalStatus === "completed" && (!Array.isArray(body.completionClaims) || body.completionClaims.length === 0)) {
+            throw new Error("Completed micro UserReport requires at least one completion claim");
+          }
+          if (body.terminalStatus === "completed") {
+            if (!receipt) {
+              throw new Error("Completed micro UserReport requires a ReceiptAudit companion");
+            }
+            if (receipt.digestStatus !== "verified") {
+              throw new Error("Completed micro UserReport requires a verified ReceiptAudit");
+            }
+            if (receipt.controllingReviewRef !== qualityRef) {
+              throw new Error("ReceiptAudit must cite the controlling QualityReview");
+            }
+          }
+          if (body.terminalStatus !== "completed" && !stringArray(body.findingRefs).includes(qualityRef)) {
+            throw new Error("Micro UserReport must cite the controlling QualityReview");
+          }
+          this.assertEvidenceSemantics(submission);
+          return;
+        }
         const promptReviewRecord = this.ledger.findLatestArtifact(run.runId, "PromptReview");
         const clarificationRecord = this.ledger.findLatestArtifact(run.runId, "ClarificationRequest");
         const controllingRef = promptReviewRecord ? `artifact://${run.runId}/${promptReviewRecord.id}` : clarificationRecord ? `artifact://${run.runId}/${clarificationRecord.id}` : null;
@@ -34732,6 +35521,16 @@ var RunController = class {
     };
   }
   assertEvidenceSemantics(submission) {
+    const run = this.ledger.requireRun(submission.runId);
+    for (const ref of collectCrossRunEvidenceRefs(submission.body)) {
+      const crossRunMatch = /^artifact:\/\/([^/]+)\//u.exec(ref);
+      if (!crossRunMatch || crossRunMatch[1] === submission.runId) {
+        continue;
+      }
+      if (run.priorRunId) {
+        validateCrossRunEvidenceRef(this.ledger, run, ref, run.priorRunId);
+      }
+    }
     for (const reference of collectArtifactReferences(submission.body)) {
       if (!reference.ref.startsWith("artifact://") || !requiresDirectEvidence(reference.path, submission.type)) {
         continue;
@@ -34865,6 +35664,10 @@ var RunController = class {
         throw new Error(`Invalid artifact reference at ${reference.path}`);
       const [, referencedRunId, artifactId] = match;
       if (referencedRunId !== submission.runId) {
+        if (evidenceRun.priorRunId && referencedRunId === evidenceRun.priorRunId) {
+          validateCrossRunEvidenceRef(this.ledger, evidenceRun, reference.ref, evidenceRun.priorRunId);
+          continue;
+        }
         throw new Error(`Cross-run artifact reference denied at ${reference.path}`);
       }
       const isAllowedUserReportForwardReference = submission.type === "ReleaseAudit" && reference.path === "body.userReportRef" && typeof submission.body.userReportRef === "string";
@@ -34980,6 +35783,224 @@ var RunController = class {
   }
 };
 
+// packages/core/dist/tool-broker.js
+function emptyPermissionSet2() {
+  return {
+    repository: { read: [], write: [], delete: [] },
+    shell: { inspect: false, executeAllowlist: [] },
+    runtime: { inspect: [], restart: [] },
+    browser: { inspect: false, mutateState: false },
+    network: { readDomains: [], externalWrite: false },
+    subagents: { spawn: false, maximumChildren: 0, maximumDepth: 0 }
+  };
+}
+function intersectStructuredPermissions2(projection, granted, denied) {
+  const effective = emptyPermissionSet2();
+  if (projection.repository_read && denied.repository.read.length === 0) {
+    effective.repository.read = [...granted.repository.read];
+  }
+  if (projection.repository_write && denied.repository.write.length === 0) {
+    effective.repository.write = [...granted.repository.write];
+  }
+  if (projection.repository_delete && denied.repository.delete.length === 0) {
+    effective.repository.delete = [...granted.repository.delete];
+  }
+  if (projection.shell_execute && denied.shell.executeAllowlist.length === 0) {
+    effective.shell.executeAllowlist = [...granted.shell.executeAllowlist];
+  }
+  effective.shell.inspect = projection.shell_inspect && granted.shell.inspect && !denied.shell.inspect;
+  if (projection.runtime_inspect && denied.runtime.inspect.length === 0) {
+    effective.runtime.inspect = [...granted.runtime.inspect];
+  }
+  if (projection.runtime_mutate && denied.runtime.restart.length === 0) {
+    effective.runtime.restart = [...granted.runtime.restart];
+  }
+  effective.browser.inspect = projection.browser_inspect && granted.browser.inspect && !denied.browser.inspect;
+  effective.browser.mutateState = projection.browser_mutate && granted.browser.mutateState && !denied.browser.mutateState;
+  if (projection.network_read && denied.network.readDomains.length === 0) {
+    effective.network.readDomains = [...granted.network.readDomains];
+  }
+  effective.network.externalWrite = projection.external_write && granted.network.externalWrite && !denied.network.externalWrite;
+  if (projection.subagent_spawn && granted.subagents.spawn && !denied.subagents.spawn) {
+    effective.subagents = { ...granted.subagents };
+  }
+  return effective;
+}
+function permissionsFromEnvelope(mode2, envelope) {
+  const ceiling = projectPermissions(mode2);
+  if (typeof envelope !== "object" || envelope === null || !("authorization" in envelope)) {
+    return emptyPermissionSet2();
+  }
+  const authorization = envelope.authorization;
+  if (typeof authorization !== "object" || authorization === null || !("granted" in authorization) || !("denied" in authorization)) {
+    return emptyPermissionSet2();
+  }
+  return intersectStructuredPermissions2(ceiling, authorization.granted, authorization.denied);
+}
+function actionKindForCapability2(capability2) {
+  if (capability2 === "runtime.restart")
+    return "runtime.mutate";
+  const known = [
+    "repository.read",
+    "repository.write",
+    "repository.delete",
+    "shell.inspect",
+    "shell.execute",
+    "runtime.inspect",
+    "runtime.mutate",
+    "browser.inspect",
+    "browser.mutate",
+    "network.read",
+    "external.write",
+    "subagent.spawn"
+  ];
+  return known.includes(capability2) ? capability2 : null;
+}
+function tracePermissionDecision2(capability2, target, allowed, policyRefs, rationaleSummary) {
+  const rawTarget = target ?? "unknown";
+  let scope = rawTarget;
+  if ((capability2 === "network.read" || capability2 === "external.write") && rawTarget !== "unknown") {
+    try {
+      const parsed = new URL(rawTarget.includes("://") ? rawTarget : `http://${rawTarget}`);
+      scope = normalizeNetworkReadDomain(parsed.hostname) ?? "invalid_network_target";
+    } catch {
+      scope = "invalid_network_target";
+    }
+  }
+  return {
+    decision: allowed ? "allow" : "deny",
+    capability: capability2,
+    scope,
+    policyRefs,
+    rationaleSummary
+  };
+}
+function brokerPolicies(mode2, permissions) {
+  return [
+    policyForMode(mode2),
+    policyFromPermissionSet("run_envelope", permissions)
+  ];
+}
+function evaluateBrokerAction(context, request) {
+  const policyRefs = context.policyRefs ?? [];
+  const kind = request.kind ?? actionKindForCapability2(request.capability);
+  if (!kind) {
+    const permissionDecision2 = tracePermissionDecision2(request.capability, request.target, false, policyRefs, "Denied: capability is not broker-backed.");
+    return {
+      allowed: false,
+      reasonCode: "capability_not_granted",
+      summary: permissionDecision2.rationaleSummary,
+      permissionDecision: permissionDecision2
+    };
+  }
+  const actionRequest = {
+    kind,
+    ...request.target !== void 0 ? { target: request.target } : {}
+  };
+  const decision = authorizeAction(actionRequest, brokerPolicies(context.mode, context.permissions), context.repositoryRoot);
+  let reasonCode;
+  if (decision.allowed) {
+    reasonCode = "allowed";
+  } else if (decision.deniedBy.includes("no_policy")) {
+    reasonCode = "no_policy";
+  } else {
+    reasonCode = "policy_denied";
+  }
+  const permissionDecision = tracePermissionDecision2(request.capability, request.target, decision.allowed, policyRefs, decision.summary);
+  return {
+    allowed: decision.allowed,
+    reasonCode,
+    summary: decision.summary,
+    permissionDecision
+  };
+}
+
+// packages/core/dist/replay-inspector.js
+var ARTIFACT_REF_PATTERN3 = /^artifact:\/\/([0-9a-f-]{36})\/([A-Za-z0-9][A-Za-z0-9._:-]*)$/u;
+function verifyArtifactDigest(ledger, runId, artifactId) {
+  try {
+    ledger.getArtifact(runId, artifactId);
+    return "ok";
+  } catch (error51) {
+    const message = error51 instanceof Error ? error51.message : String(error51);
+    if (message.includes("integrity check failed"))
+      return "mismatch";
+    if (message.includes("ENOENT") || message.includes("must be a regular file") || message.includes("Stored artifact blob")) {
+      return "missing";
+    }
+    return "missing";
+  }
+}
+function parseArtifactRef3(reference) {
+  const match = ARTIFACT_REF_PATTERN3.exec(reference);
+  if (!match)
+    return null;
+  return { runId: match[1], artifactId: match[2] };
+}
+function escalationHighlights(ledger, runId) {
+  return ledger.listTrace(runId).filter((event) => event.eventType === "topology_escalated").map((event) => event.decisionSummary);
+}
+function brokerDenyHighlights(ledger, runId) {
+  return ledger.listTrace(runId).filter((event) => event.eventType === "broker_decision" && event.permissionDecision?.decision === "deny").map((event) => event.decisionSummary);
+}
+function artifactTraceIndex(ledger, runId) {
+  const escalationBySequence = /* @__PURE__ */ new Map();
+  for (const event of ledger.listTrace(runId)) {
+    if (event.eventType === "topology_escalated") {
+      escalationBySequence.set(event.sequence, event.decisionSummary);
+    }
+  }
+  const index = /* @__PURE__ */ new Map();
+  for (const event of ledger.listTrace(runId)) {
+    for (const reference of event.outputRefs) {
+      const parsed = parseArtifactRef3(reference);
+      if (!parsed || parsed.runId !== runId)
+        continue;
+      index.set(parsed.artifactId, {
+        sequence: event.sequence,
+        phase: event.phase,
+        ...escalationBySequence.has(event.sequence) ? { escalationReason: escalationBySequence.get(event.sequence) } : {}
+      });
+    }
+  }
+  return index;
+}
+function inspectRunReplay(ledger, run) {
+  if (run.topology === "micro") {
+    return {
+      runId: run.runId,
+      topology: run.topology,
+      steps: [],
+      traceHighlights: [],
+      degraded: true,
+      reason: "micro_topology"
+    };
+  }
+  const traceIndex = artifactTraceIndex(ledger, run.runId);
+  const steps = ledger.listArtifacts(run.runId).map((stored, index) => {
+    const artifactRef = `artifact://${run.runId}/${stored.id}`;
+    const traced = traceIndex.get(stored.id);
+    return {
+      sequence: traced?.sequence ?? index,
+      phase: traced?.phase ?? run.phase,
+      artifactRef,
+      artifactType: stored.type,
+      digestStatus: verifyArtifactDigest(ledger, run.runId, stored.id),
+      ...traced?.escalationReason ? { escalationReason: traced.escalationReason } : {}
+    };
+  });
+  steps.sort((left, right) => left.sequence - right.sequence);
+  return {
+    runId: run.runId,
+    topology: run.topology,
+    steps,
+    traceHighlights: [
+      ...escalationHighlights(ledger, run.runId),
+      ...brokerDenyHighlights(ledger, run.runId)
+    ]
+  };
+}
+
 // packages/protocol/dist/common.js
 var SCHEMA_VERSION = "1.0";
 var MAX_TEXT_BYTES = 32768;
@@ -35013,6 +36034,7 @@ var IntentModeSchema = external_exports.enum([
   "fix_only",
   "analyze_and_fix"
 ]);
+var RunTopologySchema = external_exports.enum(["micro", "standard", "forensic"]);
 var ActionCapabilitySchema = external_exports.enum([
   "repository.read",
   "repository.write",
@@ -35098,6 +36120,7 @@ var PhaseSchema = external_exports.enum([
   "agent_4_execute",
   "diagnosis_review",
   "agent_3_quality_review",
+  "agent_3_evidence_reverify",
   "remediation_plan",
   "agent_4_remediation",
   "agent_5_release_audit",
@@ -35131,6 +36154,7 @@ var ArtifactTypeSchema = external_exports.enum([
   "WorkResult",
   "QualityReview",
   "ReleaseAudit",
+  "ReceiptAudit",
   "UserReport",
   "TraceEvent",
   "Evidence"
@@ -35261,6 +36285,7 @@ var RunEnvelopeSchema = external_exports.object({
   originalRequestRef: ArtifactUriSchema,
   followupRequestRefs: external_exports.array(ArtifactUriSchema).max(MAX_COLLECTION_ITEMS),
   requestedMode: IntentModeSchema.nullable(),
+  topology: RunTopologySchema.default("standard"),
   status: RunStatusSchema,
   workingContext: WorkingContextSchema,
   host: HostDescriptorSchema,
@@ -35542,12 +36567,17 @@ var TraceEventSchema = external_exports.object({
     "transition_allowed",
     "transition_denied",
     "permission_checked",
+    "broker_decision",
     "tool_started",
     "tool_finished",
     "budget_consumed",
     "clarification_requested",
     "redaction_applied",
-    "run_terminated"
+    "run_terminated",
+    "topology_classified",
+    "topology_escalated",
+    "digest_verified",
+    "lineage_linked"
   ]),
   inputRefs: external_exports.array(ReferenceUriSchema).max(MAX_COLLECTION_ITEMS),
   outputRefs: external_exports.array(ReferenceUriSchema).max(MAX_COLLECTION_ITEMS),
@@ -35570,7 +36600,7 @@ var TraceEventSchema = external_exports.object({
     ])
   }).strict()).max(MAX_COLLECTION_ITEMS)
 }).strict().superRefine((event, context) => {
-  if (event.eventType === "permission_checked" && event.permissionDecision === null) {
+  if ((event.eventType === "permission_checked" || event.eventType === "broker_decision") && event.permissionDecision === null) {
     context.addIssue({
       code: "custom",
       path: ["permissionDecision"],
@@ -36299,6 +37329,7 @@ var QualityReviewSchema = external_exports.object({
   hardGates: external_exports.array(HardGateResultSchema).min(1).max(MAX_COLLECTION_ITEMS),
   score: external_exports.number().min(0).max(100),
   remainingRemediations: external_exports.number().int().min(0).max(1),
+  reviewKind: external_exports.enum(["spot", "evidence_reverify"]).default("spot"),
   decision: external_exports.enum([
     "pass",
     "proceed_to_fix",
@@ -36563,6 +37594,31 @@ var UserReportSchema = external_exports.object({
     });
   }
 });
+var ReceiptAuditSchema = external_exports.object({
+  schemaVersion: SchemaVersionSchema,
+  id: IdentifierSchema,
+  runId: RunIdSchema,
+  controllingReviewRef: ArtifactUriSchema,
+  claimEvidenceMatrix: external_exports.array(ClaimEvidenceEntrySchema).max(MAX_COLLECTION_ITEMS),
+  digestStatus: external_exports.enum(["verified", "failed"]),
+  verifiedAt: TimestampSchema
+}).strict().superRefine((receipt, context) => {
+  const claimIds = receipt.claimEvidenceMatrix.map((entry) => entry.claimId);
+  if (new Set(claimIds).size !== claimIds.length) {
+    context.addIssue({
+      code: "custom",
+      path: ["claimEvidenceMatrix"],
+      message: "Receipt-audit claim identifiers must be unique"
+    });
+  }
+  if (receipt.digestStatus === "verified" && receipt.claimEvidenceMatrix.some((entry) => entry.status !== "supported")) {
+    context.addIssue({
+      code: "custom",
+      path: ["digestStatus"],
+      message: "Verified receipts require supported claim evidence"
+    });
+  }
+});
 
 // packages/protocol/dist/artifact-envelope.js
 var ArtifactBodySchemas = {
@@ -36578,6 +37634,7 @@ var ArtifactBodySchemas = {
   WorkResult: WorkResultSchema,
   QualityReview: QualityReviewSchema,
   ReleaseAudit: ReleaseAuditSchema,
+  ReceiptAudit: ReceiptAuditSchema,
   UserReport: UserReportSchema,
   TraceEvent: TraceEventSchema,
   Evidence: EvidenceArtifactSchema
@@ -36654,6 +37711,11 @@ var ArtifactEnvelopeVariants = [
     ...ArtifactMetadataShape,
     artifactType: external_exports.literal("ReleaseAudit"),
     body: ReleaseAuditSchema
+  }).strict(),
+  external_exports.object({
+    ...ArtifactMetadataShape,
+    artifactType: external_exports.literal("ReceiptAudit"),
+    body: ReceiptAuditSchema
   }).strict(),
   external_exports.object({
     ...ArtifactMetadataShape,
@@ -36846,6 +37908,7 @@ var parseWorkPlan = parserFor(WorkPlanSchema);
 var parseWorkResult = parserFor(WorkResultSchema);
 var parseQualityReview = parserFor(QualityReviewSchema);
 var parseReleaseAudit = parserFor(ReleaseAuditSchema);
+var parseReceiptAudit = parserFor(ReceiptAuditSchema);
 var parseUserReport = parserFor(UserReportSchema);
 var parseTraceEvent = parserFor(TraceEventSchema);
 var parseEvidenceArtifact = parserFor(EvidenceArtifactSchema);
@@ -36866,12 +37929,43 @@ var safeParseUserReport = safeParserFor(UserReportSchema);
 var safeParseTraceEvent = safeParserFor(TraceEventSchema);
 var safeParseEvidenceArtifact = safeParserFor(EvidenceArtifactSchema);
 
+// packages/protocol/dist/topology.js
+var ClassifyRunSignalSchema = external_exports.enum([
+  "OVERRIDE_MICRO",
+  "OVERRIDE_STANDARD",
+  "OVERRIDE_FORENSIC",
+  "ANALYZE_AND_FIX",
+  "ELEVATED_CAPABILITY",
+  "NETWORK_READ",
+  "SHELL_EXECUTE_ALLOWLIST",
+  "LONG_REQUEST",
+  "COMPLEXITY_KEYWORD",
+  "INVESTIGATIVE_MODE",
+  "PLAN_ONLY",
+  "FIX_ONLY",
+  "MICRO_SHORT_REPORT_ONLY",
+  "MICRO_SHORT_FIX_ONLY",
+  "DEFAULT_STANDARD"
+]);
+var ClassifyRunResultSchema = external_exports.object({
+  topology: RunTopologySchema,
+  rationaleCode: external_exports.string().min(1).max(128),
+  signals: external_exports.array(ClassifyRunSignalSchema).max(32)
+}).strict();
+var EscalationReasonCodeSchema = external_exports.enum([
+  "MICRO_SPOT_REMEDIATE",
+  "MICRO_SPOT_PARTIAL",
+  "MICRO_USER_REPORTED",
+  "STANDARD_USER_REPORTED_CLAIMS",
+  "STANDARD_EVIDENCE_STRESS"
+]);
+
 // packages/mcp/src/service.ts
 function defaultStateDirectory(repositoryRoot) {
   const canonicalRoot = realpathSync4(resolve5(repositoryRoot));
-  const repositoryKey = createHash4("sha256").update(canonicalRoot).digest("hex").slice(0, 24);
-  const stateHome = process.env.XDG_STATE_HOME ? resolve5(process.env.XDG_STATE_HOME) : join2(homedir(), ".local", "state");
-  return join2(stateHome, "telic", "repositories", repositoryKey);
+  const repositoryKey = createHash5("sha256").update(canonicalRoot).digest("hex").slice(0, 24);
+  const stateHome = process.env.XDG_STATE_HOME ? resolve5(process.env.XDG_STATE_HOME) : join3(homedir(), ".local", "state");
+  return join3(stateHome, "telic", "repositories", repositoryKey);
 }
 function protocolValidator(type, body) {
   if (!isArtifactType(type))
@@ -36918,7 +38012,7 @@ function isPathContained2(root, target) {
 function canonicalProspectivePath(path) {
   let existingAncestor = resolve5(path);
   const missingSegments = [];
-  while (!existsSync3(existingAncestor)) {
+  while (!existsSync4(existingAncestor)) {
     const parent = dirname3(existingAncestor);
     if (parent === existingAncestor) return resolve5(path);
     missingSegments.unshift(basename(existingAncestor));
@@ -37018,7 +38112,7 @@ function internalDocumentId(contextId, hash2, index) {
   return `${contextId}-source-${String(index + 1).padStart(3, "0")}-${hash2.slice("sha256:".length, 20)}`;
 }
 function emptyReportOnlyManifest(run) {
-  const digest = createHash4("sha256").update("").digest("hex");
+  const digest = createHash5("sha256").update("").digest("hex");
   return parseContextManifest({
     schemaVersion: "1.0",
     id: `context-report-only-${run.runId.slice(0, 12)}`,
@@ -37056,6 +38150,7 @@ var tracePhase = {
   agent_3_plan: "agent_3_plan",
   agent_4_execute: "agent_4_execute",
   agent_3_review: "agent_3_quality_review",
+  agent_3_evidence_reverify: "agent_3_evidence_reverify",
   agent_5_audit: "agent_5_release_audit",
   agent_5_report: "user_report"
 };
@@ -37067,8 +38162,13 @@ var canonicalTraceEventType = {
   phase_submitted: "phase_submitted",
   clarification_requested: "clarification_requested",
   permission_checked: "permission_checked",
+  broker_decision: "broker_decision",
   clarification_answered: "transition_allowed",
-  run_cancelled: "run_terminated"
+  run_cancelled: "run_terminated",
+  topology_classified: "topology_classified",
+  digest_verified: "digest_verified",
+  lineage_linked: "lineage_linked",
+  topology_escalated: "topology_escalated"
 };
 var traceActors = /* @__PURE__ */ new Set([
   "controller",
@@ -37127,10 +38227,12 @@ var TelicService = class {
     const desired = input.authorizationGranted ?? defaultCapabilities(input.mode);
     const granted = intersectCapabilities(desired, hostCapabilities);
     const denied = [...new Set(input.authorizationDenied ?? [])].sort();
-    return this.controller.startRun({
+    const started = this.controller.startRun({
       repositoryRoot: this.repositoryRoot,
       originalRequest: input.originalRequest,
       requestedMode: input.mode,
+      ...input.topologyOverride !== void 0 ? { topologyOverride: input.topologyOverride } : {},
+      ...input.priorRunId !== void 0 ? { priorRunId: input.priorRunId } : {},
       host: {
         name: input.hostName ?? "mcp-host",
         nativeSubagents: input.nativeSubagents ?? "unknown",
@@ -37142,6 +38244,23 @@ var TelicService = class {
         ...input.shellExecuteAllowlist ? { shellExecuteAllowlist: input.shellExecuteAllowlist } : {},
         ...input.networkReadDomains ? { networkReadDomains: input.networkReadDomains } : {}
       }
+    });
+    this.publishActiveSession(started.run, started.nextAction);
+    return started;
+  }
+  publishActiveSession(run, nextAction) {
+    if (run.status !== "running") {
+      clearActiveSession(this.stateDirectory);
+      return;
+    }
+    writeActiveSession(this.stateDirectory, {
+      schemaVersion: "1.0",
+      runId: run.runId,
+      actionId: nextAction.id,
+      runVersion: run.version,
+      repositoryRoot: run.repositoryRoot,
+      requestedMode: run.requestedMode,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     });
   }
   async groundContext(input) {
@@ -37229,6 +38348,7 @@ var TelicService = class {
       sourceRefs,
       body: manifest
     });
+    this.publishActiveSession(result.run, result.nextAction);
     return { ...result, manifest };
   }
   submitArtifact(input) {
@@ -37350,7 +38470,7 @@ var TelicService = class {
       throw new Error(`Unsupported artifact type: ${input.type}`);
     }
     const body = parseArtifactBody(input.type, input.body);
-    return this.controller.submitArtifact({
+    const submitted = this.controller.submitArtifact({
       ...input,
       body,
       sourceRefs: traceInputRefs(
@@ -37360,14 +38480,20 @@ var TelicService = class {
         input.sourceRefs
       )
     });
+    this.publishActiveSession(submitted.run, submitted.nextAction);
+    return submitted;
   }
   answerClarification(runId, response) {
-    return this.controller.answerClarification(runId, response);
+    const answered = this.controller.answerClarification(runId, response);
+    this.publishActiveSession(answered.run, answered.nextAction);
+    return answered;
   }
   cancelRun(runId, actionId, expectedRunVersion) {
     this.assertActionToken(runId, actionId, expectedRunVersion);
     const run = this.controller.cancelRun(runId);
-    return { run, nextAction: this.controller.getNextAction(runId) };
+    const nextAction = this.controller.getNextAction(runId);
+    this.publishActiveSession(run, nextAction);
+    return { run, nextAction };
   }
   listRuns(limit = 20) {
     if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
@@ -37378,6 +38504,7 @@ var TelicService = class {
         runId,
         schemaVersion,
         requestedMode,
+        topology,
         status,
         phase,
         resumePhase,
@@ -37389,6 +38516,7 @@ var TelicService = class {
         runId,
         schemaVersion,
         requestedMode,
+        topology,
         status,
         phase,
         resumePhase,
@@ -37411,6 +38539,47 @@ var TelicService = class {
     const artifact = this.ledger.getArtifact(runId, artifactId);
     if (!artifact) throw new Error(`Artifact not found: ${artifactId}`);
     return artifact;
+  }
+  checkToolAction(input) {
+    this.assertActionToken(
+      input.runId,
+      input.actionId,
+      input.expectedRunVersion
+    );
+    const run = this.ledger.requireRun(input.runId);
+    const envelopeRecord = this.ledger.findLatestArtifact(
+      input.runId,
+      "RunEnvelope"
+    );
+    const envelopeBody = envelopeRecord ? this.ledger.getArtifact(input.runId, envelopeRecord.id)?.body : null;
+    const envelopeRef = envelopeRecord ? "artifact://" + input.runId + "/" + envelopeRecord.id : null;
+    const decision = evaluateBrokerAction(
+      {
+        repositoryRoot: run.repositoryRoot,
+        mode: run.requestedMode,
+        permissions: permissionsFromEnvelope(run.requestedMode, envelopeBody),
+        ...envelopeRef ? { policyRefs: [envelopeRef] } : {}
+      },
+      {
+        capability: input.capability,
+        ...input.target !== void 0 ? { target: input.target } : {},
+        runId: input.runId,
+        actionId: input.actionId
+      }
+    );
+    this.ledger.appendTraceEvent(input.runId, {
+      actor: "host",
+      eventType: "broker_decision",
+      phase: run.phase,
+      inputRefs: envelopeRef ? [envelopeRef] : [],
+      permissionDecision: decision.permissionDecision,
+      decisionSummary: decision.allowed ? "Broker allowed " + input.capability + "." : "Broker denied " + input.capability + ": " + decision.reasonCode + "."
+    });
+    return decision;
+  }
+  replayRun(runId) {
+    const run = this.ledger.requireRun(runId);
+    return inspectRunReplay(this.ledger, run);
   }
   getTrace(runId, afterSequence = 0, limit = 1e4) {
     this.ledger.requireRun(runId);
@@ -37578,7 +38747,9 @@ function registerTools(server, service) {
         authorization_granted: external_exports.array(capability).max(256).optional(),
         authorization_denied: external_exports.array(capability).max(256).default([]),
         shell_execute_allowlist: external_exports.array(external_exports.string().min(1).max(2048)).max(256).default([]),
-        network_read_domains: external_exports.array(external_exports.string().min(1).max(253)).max(256).default([])
+        network_read_domains: external_exports.array(external_exports.string().min(1).max(253)).max(256).default([]),
+        topology_override: external_exports.enum(["micro", "standard", "forensic"]).optional(),
+        prior_run_id: external_exports.string().uuid().optional()
       },
       annotations: {
         readOnlyHint: false,
@@ -37600,7 +38771,9 @@ function registerTools(server, service) {
             ...input.authorization_granted ? { authorizationGranted: input.authorization_granted } : {},
             authorizationDenied: input.authorization_denied,
             shellExecuteAllowlist: input.shell_execute_allowlist,
-            networkReadDomains: input.network_read_domains
+            networkReadDomains: input.network_read_domains,
+            ...input.topology_override ? { topologyOverride: input.topology_override } : {},
+            ...input.prior_run_id ? { priorRunId: input.prior_run_id } : {}
           })
         });
       } catch (error51) {
@@ -37877,6 +39050,62 @@ function registerTools(server, service) {
           events,
           hasMore: page.length > limit
         });
+      } catch (error51) {
+        return errorResult(error51);
+      }
+    }
+  );
+  server.registerTool(
+    "telic_check_tool_action",
+    {
+      title: "Check host tool action",
+      description: "Evaluate a host-native tool call against run permissions before execution. Records a broker_decision trace event.",
+      inputSchema: {
+        run_id: id,
+        action_id: id,
+        expected_run_version: external_exports.number().int().min(0),
+        capability,
+        target: external_exports.string().min(1).max(2048).optional()
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false
+      }
+    },
+    async ({ run_id, action_id, expected_run_version, capability: capability2, target }) => {
+      try {
+        const decision = service.checkToolAction({
+          runId: run_id,
+          actionId: action_id,
+          expectedRunVersion: expected_run_version,
+          capability: capability2,
+          ...target !== void 0 ? { target } : {}
+        });
+        return successResult({ ok: true, decision });
+      } catch (error51) {
+        return errorResult(error51);
+      }
+    }
+  );
+  server.registerTool(
+    "telic_replay_run",
+    {
+      title: "Replay run inspector",
+      description: "Forensic replay report with artifact digest steps and trace highlights. Micro topology returns a degraded flag without full replay.",
+      inputSchema: { run_id: id },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ run_id }) => {
+      try {
+        const report = service.replayRun(run_id);
+        return successResult({ ok: true, report });
       } catch (error51) {
         return errorResult(error51);
       }

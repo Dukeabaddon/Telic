@@ -11,6 +11,6 @@
   "maxPhases": 5,
   "requiresReleaseAudit": false,
   "requiresPromptReview": false,
-  "requiresReceiptAudit": false,
+  "requiresReceiptAudit": true,
   "timeRatioTarget": 1.2
 }

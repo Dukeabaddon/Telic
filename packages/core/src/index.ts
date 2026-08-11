@@ -11,5 +11,7 @@ export * from "./certify-run.js";
 export * from "./contract-delta.js";
 export * from "./evidence-oracle.js";
 export * from "./tool-broker.js";
+export * from "./host-tool-gate.js";
 export * from "./replay-inspector.js";
+
 

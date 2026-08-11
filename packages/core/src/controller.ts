@@ -1503,9 +1503,10 @@ export class RunController {
     const additionalEvents =
       permissionEvents.length > 0 ? [...permissionEvents.slice(1), event] : [];
     if (
-      current.topology === "micro" &&
+      (current.topology === "micro" || current.topology === "standard") &&
       submission.type === "QualityReview" &&
-      body.decision === "pass"
+      body.decision === "pass" &&
+      !this.latestBody(submission.runId, "ReceiptAudit", false)
     ) {
       const cert = certifyRun(this.ledger, submission.runId, body);
       const receiptId = "receipt-01";

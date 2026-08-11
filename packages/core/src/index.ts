@@ -1,3 +1,4 @@
+export * from "./active-session.js";
 export * from "./canonical-json.js";
 export * from "./controller.js";
 export * from "./ledger.js";
@@ -13,5 +14,6 @@ export * from "./evidence-oracle.js";
 export * from "./tool-broker.js";
 export * from "./host-tool-gate.js";
 export * from "./replay-inspector.js";
+
 
 

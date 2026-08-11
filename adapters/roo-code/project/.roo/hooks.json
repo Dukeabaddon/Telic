@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "command": ".roo/hooks/broker-gate.mjs",
+        "matcher": "Write|StrReplace|Delete|Shell|ApplyPatch|EditNotebook"
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": ".roo/hooks/broker-gate.mjs"
+      }
+    ]
+  }
+}

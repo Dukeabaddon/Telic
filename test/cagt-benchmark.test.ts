@@ -350,3 +350,51 @@ describe("CAGT benchmark scorecards", () => {
     }
   });
 });
+
+
+describe("CAGT benchmark topology scorecards", () => {
+  it("standard report_only selects the standard topology", () => {
+    const scorecard = loadScorecard("standard-report-only");
+    const repositoryRoot = mkdtempSync(join(tmpdir(), "telic-cagt-standard-"));
+    mkdirSync(join(repositoryRoot, "src"), { recursive: true });
+    writeFileSync(join(repositoryRoot, "src", "index.ts"), "export const x = 1;\n");
+    const service = new TelicService({
+      repositoryRoot,
+      stateDirectory: mkdtempSync(join(tmpdir(), "telic-cagt-standard-state-")),
+    });
+    services.push(service);
+    const started = service.startRun({
+      originalRequest:
+        "Summarize how packages/core and packages/mcp interact in a short report.",
+      mode: scorecard.mode as "report_only",
+      topologyOverride: "standard",
+      hostName: "cagt-benchmark",
+      nativeSubagents: "unavailable",
+      hostCapabilities: ["repository.read"],
+      authorizationGranted: ["repository.read"],
+    });
+    expect(started.run.topology).toBe(scorecard.topology);
+  });
+
+  it("forensic analyze_and_fix selects the forensic topology", () => {
+    const scorecard = loadScorecard("forensic-analyze-fix");
+    const repositoryRoot = mkdtempSync(join(tmpdir(), "telic-cagt-forensic-"));
+    mkdirSync(join(repositoryRoot, "src"), { recursive: true });
+    writeFileSync(join(repositoryRoot, "src", "index.ts"), "export const x = 1;\n");
+    const service = new TelicService({
+      repositoryRoot,
+      stateDirectory: mkdtempSync(join(tmpdir(), "telic-cagt-forensic-state-")),
+    });
+    services.push(service);
+    const started = service.startRun({
+      originalRequest:
+        "Forensic analyze_and_fix: reproduce the regression, capture evidence, and remediate with digest verification.",
+      mode: scorecard.mode as "analyze_and_fix",
+      hostName: "cagt-benchmark",
+      nativeSubagents: "unavailable",
+      hostCapabilities: ["repository.read", "repository.write"],
+      authorizationGranted: ["repository.read", "repository.write"],
+    });
+    expect(started.run.topology).toBe(scorecard.topology);
+  });
+});

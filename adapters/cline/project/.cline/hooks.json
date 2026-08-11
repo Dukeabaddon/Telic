@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "command": ".cline/hooks/broker-gate.mjs",
+        "matcher": "Write|StrReplace|Delete|Shell|ApplyPatch|EditNotebook"
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": ".cline/hooks/broker-gate.mjs"
+      }
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "topology": "standard",
+  "mode": "report_only",
+  "expectedPhases": [
+    "context_discovery",
+    "agent_1_frame",
+    "agent_2_compile",
+    "agent_3_quality_review",
+    "user_report"
+  ],
+  "maxPhases": 10,
+  "requiresReleaseAudit": false,
+  "requiresPromptReview": true,
+  "requiresReceiptAudit": true,
+  "timeRatioTarget": 1.35
+}

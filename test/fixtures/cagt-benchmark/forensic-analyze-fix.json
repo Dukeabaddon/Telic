@@ -1,0 +1,17 @@
+{
+  "topology": "forensic",
+  "mode": "analyze_and_fix",
+  "expectedPhases": [
+    "context_discovery",
+    "agent_1_frame",
+    "agent_2_compile",
+    "agent_4_execute",
+    "agent_3_evidence_reverify",
+    "agent_3_quality_review"
+  ],
+  "maxPhases": 11,
+  "requiresReleaseAudit": true,
+  "requiresPromptReview": true,
+  "requiresReceiptAudit": true,
+  "timeRatioTarget": 1.5
+}

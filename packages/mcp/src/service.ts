@@ -18,6 +18,9 @@ import {
   type GroundingBudgetInput,
 } from "@telic/context";
 import {
+  clearActiveSession,
+  writeActiveSession,
+  type NextAction,
   RunController,
   SqliteLedger,
   evaluateBrokerAction,
@@ -428,7 +431,7 @@ export class TelicService {
       input.authorizationGranted ?? defaultCapabilities(input.mode);
     const granted = intersectCapabilities(desired, hostCapabilities);
     const denied = [...new Set(input.authorizationDenied ?? [])].sort();
-    return this.controller.startRun({
+    const started = this.controller.startRun({
       repositoryRoot: this.repositoryRoot,
       originalRequest: input.originalRequest,
       requestedMode: input.mode,
@@ -451,6 +454,24 @@ export class TelicService {
           ? { networkReadDomains: input.networkReadDomains }
           : {}),
       },
+    });
+    this.publishActiveSession(started.run, started.nextAction);
+    return started;
+  }
+
+  private publishActiveSession(run: RunRecord, nextAction: NextAction): void {
+    if (run.status !== "running") {
+      clearActiveSession(this.stateDirectory);
+      return;
+    }
+    writeActiveSession(this.stateDirectory, {
+      schemaVersion: "1.0",
+      runId: run.runId,
+      actionId: nextAction.id,
+      runVersion: run.version,
+      repositoryRoot: run.repositoryRoot,
+      requestedMode: run.requestedMode,
+      updatedAt: new Date().toISOString(),
     });
   }
 
@@ -557,6 +578,7 @@ export class TelicService {
       sourceRefs,
       body: manifest,
     });
+    this.publishActiveSession(result.run, result.nextAction);
     return { ...result, manifest };
   }
 
@@ -708,7 +730,7 @@ export class TelicService {
       throw new Error(`Unsupported artifact type: ${input.type}`);
     }
     const body = parseArtifactBody(input.type, input.body);
-    return this.controller.submitArtifact({
+    const submitted = this.controller.submitArtifact({
       ...input,
       body,
       sourceRefs: traceInputRefs(
@@ -718,16 +740,22 @@ export class TelicService {
         input.sourceRefs,
       ),
     });
+    this.publishActiveSession(submitted.run, submitted.nextAction);
+    return submitted;
   }
 
   answerClarification(runId: string, response: string) {
-    return this.controller.answerClarification(runId, response);
+    const answered = this.controller.answerClarification(runId, response);
+    this.publishActiveSession(answered.run, answered.nextAction);
+    return answered;
   }
 
   cancelRun(runId: string, actionId: string, expectedRunVersion: number) {
     this.assertActionToken(runId, actionId, expectedRunVersion);
     const run = this.controller.cancelRun(runId);
-    return { run, nextAction: this.controller.getNextAction(runId) };
+    const nextAction = this.controller.getNextAction(runId);
+    this.publishActiveSession(run, nextAction);
+    return { run, nextAction };
   }
 
   listRuns(limit = 20): RunSummary[] {

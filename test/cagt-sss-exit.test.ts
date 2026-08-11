@@ -50,7 +50,12 @@ describe("CAGT SSS exit predicate", () => {
       repositoryRoot,
       "test/fixtures/cagt-benchmark",
     );
-    for (const name of ["micro-report-only", "micro-fix-only"]) {
+    for (const name of [
+      "micro-report-only",
+      "micro-fix-only",
+      "standard-report-only",
+      "forensic-analyze-fix",
+    ]) {
       expect(
         existsSync(join(fixtureDir, `${name}.json`)),
         `missing scorecard ${name}`,
@@ -132,6 +137,34 @@ describe("CAGT SSS exit predicate", () => {
     );
     expect(allowed.allowed).toBe(true);
     expect(allowed.permissionDecision.decision).toBe("allow");
+  });
+
+  it("includes broker hook and replay CLI smoke tests", () => {
+    expect(
+      existsSync(join(repositoryRoot, "test/cagt-broker-hook-e2e.test.ts")),
+    ).toBe(true);
+    expect(existsSync(join(repositoryRoot, "test/cagt-replay-cli.test.ts"))).toBe(
+      true,
+    );
+    const cliSource = readFileSync(
+      join(repositoryRoot, "packages/cli/src/index.ts"),
+      "utf8",
+    );
+    expect(cliSource).toContain('command === "broker-gate"');
+    expect(cliSource).toContain('command === "replay"');
+    expect(
+      existsSync(
+        join(
+          repositoryRoot,
+          "adapters/cursor/project/.cursor/hooks/broker-gate.mjs",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      existsSync(
+        join(repositoryRoot, "adapters/cline/project/.cline/hooks/broker-gate.mjs"),
+      ),
+    ).toBe(true);
   });
 
   it("meets the minimum CAGT vitest file floor (>= 10)", () => {

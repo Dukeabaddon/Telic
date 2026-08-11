@@ -1,6 +1,5 @@
 "use client";
 
-import { track } from "@vercel/analytics";
 import { ArrowRight } from "lucide-react";
 import { useRef, useState } from "react";
 
@@ -24,7 +23,6 @@ export function WorkflowExplorer() {
   function select(index: number) {
     setActiveIndex(index);
     tabRefs.current[index]?.focus();
-    track("workflow_stage_selected", { stage: workflowStages[index].id });
   }
 
   function onKeyDown(event: React.KeyboardEvent, index: number) {

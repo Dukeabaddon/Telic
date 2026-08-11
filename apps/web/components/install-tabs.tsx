@@ -1,6 +1,5 @@
 "use client";
 
-import { track } from "@vercel/analytics";
 import { CheckCircle2, Info } from "lucide-react";
 import { useRef, useState } from "react";
 
@@ -19,7 +18,6 @@ export function InstallTabs() {
   function select(index: number) {
     setActiveIndex(index);
     tabRefs.current[index]?.focus();
-    track("host_tab_selected", { host: installGuides[index].id });
   }
 
   function onKeyDown(event: React.KeyboardEvent, index: number) {

@@ -1394,8 +1394,8 @@ svg {
 
   .hero-visual {
     margin-inline: auto;
-    max-width: 620px;
-    width: 100%;
+    max-width: 80vw;
+    width: 80vw;
   }
 
   .proof-grid {
@@ -2810,10 +2810,11 @@ svg {
 }
 
 .hero-copy .hero-visual {
-  margin: 40px auto 0;
-  max-width: 880px;
+  margin: 40px calc(50% - 40vw) 0;
+  max-width: 80vw;
   overflow: visible;
   text-align: left;
+  width: 80vw;
 }
 
 .hero-copy .hero-signature {
@@ -2822,8 +2823,9 @@ svg {
 
 .hero-visual {
   margin: 72px auto 0;
-  max-width: 1120px;
+  max-width: 80vw;
   overflow: visible;
+  width: 80vw;
 }
 
 .hero-console {

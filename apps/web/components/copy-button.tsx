@@ -1,6 +1,5 @@
 "use client";
 
-import { track } from "@vercel/analytics";
 import { Check, Copy } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -22,7 +21,6 @@ export function CopyButton({
   async function copy() {
     await navigator.clipboard.writeText(text);
     setCopied(true);
-    track("copy_install_command", { label });
   }
 
   return (
@@ -35,3 +33,4 @@ export function CopyButton({
     </button>
   );
 }
+

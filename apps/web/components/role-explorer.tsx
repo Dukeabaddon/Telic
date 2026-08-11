@@ -1,6 +1,5 @@
 "use client";
 
-import { track } from "@vercel/analytics";
 import { ChevronDown } from "lucide-react";
 import { useRef, useState } from "react";
 
@@ -30,7 +29,6 @@ export function RoleExplorer() {
     const role = roles[index];
     setActiveId(role.id);
     tabsRef.current[index]?.focus();
-    track("role_selected", { role: role.id });
   }
 
   function onKeyDown(event: React.KeyboardEvent, index: number) {

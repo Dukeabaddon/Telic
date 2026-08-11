@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import { Analytics } from "@vercel/analytics/next";
 import type { ReactNode } from "react";
 
 import "@fontsource-variable/manrope";
@@ -73,7 +72,6 @@ export default function RootLayout({
         <ScrollReveal />
         {children}
         <SiteFooter />
-        <Analytics />
       </body>
     </html>
   );

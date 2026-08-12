@@ -454,6 +454,35 @@ export class SqliteLedger {
     }
   }
 
+  private reconcileExistingSupportingArtifact(
+    existing: HydratedArtifact,
+    artifact: ArtifactSubmission,
+  ): StoredArtifact {
+    const expectedSourceRefs = artifact.sourceRefs ?? [];
+    const expectedRedaction = artifact.redaction ?? "none";
+    if (
+      existing.type !== artifact.type ||
+      existing.schemaVersion !== artifact.schemaVersion ||
+      existing.producer !== artifact.producer ||
+      existing.sha256 !== sha256Json(artifact.body) ||
+      canonicalJson(existing.sourceRefs) !==
+        canonicalJson(expectedSourceRefs) ||
+      existing.redaction !== expectedRedaction
+    ) {
+      throw new Error(
+        `Supporting artifact replay conflicts with immutable artifact: ${artifact.id}`,
+      );
+    }
+    const { body: _body, ...stored } = existing;
+    return stored;
+  }
+
+  private isUniqueConstraintError(error: unknown): boolean {
+    return (
+      error instanceof Error && /UNIQUE constraint failed/i.test(error.message)
+    );
+  }
+
   appendSupportingArtifact(
     artifact: ArtifactSubmission,
     event: Omit<SubmissionEvent, "phase"> & { phase?: Phase },
@@ -464,29 +493,29 @@ export class SqliteLedger {
       const run = this.requireRun(artifact.runId);
       const existing = this.getArtifact(artifact.runId, artifact.id);
       if (existing) {
-        const expectedSourceRefs = artifact.sourceRefs ?? [];
-        const expectedRedaction = artifact.redaction ?? "none";
-        if (
-          existing.type !== artifact.type ||
-          existing.schemaVersion !== artifact.schemaVersion ||
-          existing.producer !== artifact.producer ||
-          existing.sha256 !== sha256Json(artifact.body) ||
-          canonicalJson(existing.sourceRefs) !==
-            canonicalJson(expectedSourceRefs) ||
-          existing.redaction !== expectedRedaction
-        ) {
-          throw new Error(
-            `Supporting artifact replay conflicts with immutable artifact: ${artifact.id}`,
-          );
-        }
-        const { body: _body, ...stored } = existing;
+        const stored = this.reconcileExistingSupportingArtifact(
+          existing,
+          artifact,
+        );
         this.database.exec("COMMIT");
         return stored;
       }
       this.assertArtifactSlot(artifact.runId, artifact.id);
       if (quota) this.assertSupportingArtifactQuota(artifact, quota);
       const stored = this.prepareArtifact(artifact);
-      this.insertPreparedArtifact(stored);
+      try {
+        this.insertPreparedArtifact(stored);
+      } catch (error) {
+        if (!this.isUniqueConstraintError(error)) throw error;
+        const raced = this.getArtifact(artifact.runId, artifact.id);
+        if (!raced) throw error;
+        const replay = this.reconcileExistingSupportingArtifact(
+          raced,
+          artifact,
+        );
+        this.database.exec("COMMIT");
+        return replay;
+      }
       this.insertEvent(run, {
         ...event,
         phase: event.phase ?? run.phase,

@@ -29,7 +29,9 @@ type WorkerData = (LedgerWorkerData | ServiceWorkerData) & {
   contentionBarrier?: SharedArrayBuffer;
 };
 
-function signalContentionReady(contentionBarrier: SharedArrayBuffer | undefined): void {
+function signalContentionReady(
+  contentionBarrier: SharedArrayBuffer | undefined,
+): void {
   if (contentionBarrier === undefined) return;
   const counter = new Int32Array(contentionBarrier);
   const remaining = Atomics.sub(counter, 0, 1) - 1;

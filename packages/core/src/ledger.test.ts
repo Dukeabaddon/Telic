@@ -309,20 +309,24 @@ describe("SQLite ledger and content-addressed artifacts", () => {
       eventType: "evidence_captured",
       decisionSummary: "Stored bounded evidence.",
     };
-    const results = await runBlockedWorkers(supportingWorkerUrl, ledger.databasePath, [
-      {
-        kind: "ledger",
-        stateDirectory: ledger.rootDirectory,
-        artifact: base,
-        event,
-      },
-      {
-        kind: "ledger",
-        stateDirectory: ledger.rootDirectory,
-        artifact: { ...base, body: { content: "second bounded result" } },
-        event,
-      },
-    ]);
+    const results = await runBlockedWorkers(
+      supportingWorkerUrl,
+      ledger.databasePath,
+      [
+        {
+          kind: "ledger",
+          stateDirectory: ledger.rootDirectory,
+          artifact: base,
+          event,
+        },
+        {
+          kind: "ledger",
+          stateDirectory: ledger.rootDirectory,
+          artifact: { ...base, body: { content: "second bounded result" } },
+          event,
+        },
+      ],
+    );
 
     expect(results.filter((result) => result.ok)).toHaveLength(1);
     expect(

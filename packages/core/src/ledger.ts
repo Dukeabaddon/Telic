@@ -479,8 +479,7 @@ export class SqliteLedger {
 
   private isUniqueConstraintError(error: unknown): boolean {
     return (
-      error instanceof Error &&
-      /UNIQUE constraint failed/i.test(error.message)
+      error instanceof Error && /UNIQUE constraint failed/i.test(error.message)
     );
   }
 
@@ -510,7 +509,10 @@ export class SqliteLedger {
         if (!this.isUniqueConstraintError(error)) throw error;
         const raced = this.getArtifact(artifact.runId, artifact.id);
         if (!raced) throw error;
-        const replay = this.reconcileExistingSupportingArtifact(raced, artifact);
+        const replay = this.reconcileExistingSupportingArtifact(
+          raced,
+          artifact,
+        );
         this.database.exec("COMMIT");
         return replay;
       }

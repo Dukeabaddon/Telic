@@ -47,6 +47,34 @@ import type {
   StructuredPermissionSet,
   TracePermissionDecision,
 } from "./types.js";
+import {
+  directEvidenceArtifactTypes,
+  directEvidenceTraceEventTypes,
+  evidenceKindsForCapability,
+  isUserReportedEvidencePath,
+  requiresDirectEvidence,
+} from "./controller/evidence-validator.js";
+import {
+  collectArtifactReferences,
+  expectedProducer,
+  expectedReferenceType,
+  isKnownSystemReference,
+  roleByPhase,
+  systemReferenceFields,
+  terminalField,
+} from "./controller/cross-artifact-validator.js";
+import {
+  PermissionAuthorizationError,
+  buildWorkResultPermissionEvents,
+  tracePermissionDecision,
+} from "./controller/permission-trace.js";
+import {
+  MAX_TOOL_CALLS_PER_RUN,
+  assertScopedWorkOrder,
+  assertWorkPlanSubmission,
+  type WorkNodeProjection,
+  type WorkPlanProjection,
+} from "./controller/work-plan-validator.js";
 
 const artifactInputsByPhase: Record<RunRecord["phase"], Set<string>> = {
   context_grounding: new Set([
@@ -157,7 +185,6 @@ const protocolPhaseByInternal: Record<RunRecord["phase"], string> = {
 
 const MAX_NEXT_ACTION_INPUT_REFS = 256;
 const MAX_CLARIFICATIONS_PER_RUN = 1;
-const MAX_TOOL_CALLS_PER_RUN = 4_000;
 const REFERENCE_URI_PATTERN =
   /^(?:artifact|trace|repo):\/\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]+$/u;
 
@@ -247,21 +274,6 @@ function explicitPermissionProjection(
   );
   return effective;
 }
-
-const roleByPhase: Record<RunRecord["phase"], PhaseNextAction["logicalRole"]> =
-  {
-    context_grounding: "controller",
-    agent_1_frame: "scenario_author",
-    agent_2_compile: "task_compiler",
-    agent_1_review: "scenario_author",
-    agent_2_revise: "task_compiler",
-    agent_3_plan: "quality_controller",
-    agent_4_execute: "executor",
-    agent_3_review: "quality_controller",
-    agent_3_evidence_reverify: "quality_controller",
-    agent_5_audit: "release_auditor",
-    agent_5_report: "release_auditor",
-  };
 
 export interface StartRunInput {
   repositoryRoot: string;
@@ -381,123 +393,11 @@ function assertStartInput(input: StartRunInput): void {
   }
 }
 
-interface LocatedReference {
-  ref: string;
-  path: string;
-}
-
-const referenceFieldNames = new Set([
-  "applicableRuleRefs",
-  "argumentsRef",
-  "changeRefs",
-  "clarificationRequestRef",
-  "commandRef",
-  "contextManifestRef",
-  "contextRefs",
-  "derivedRefs",
-  "directEvidenceRefs",
-  "diffRef",
-  "evidenceInspected",
-  "evidenceRefs",
-  "findingRefs",
-  "followupRequestRefs",
-  "inputRefs",
-  "instructionRef",
-  "originalRequestRef",
-  "outputRef",
-  "outputRefs",
-  "pinnedRefs",
-  "policyRefs",
-  "problemFrameRef",
-  "promptReadinessRubricRef",
-  "qualityReviewRef",
-  "ref",
-  "requestRef",
-  "resultRef",
-  "ruleRefs",
-  "subjectRef",
-  "sourceRef",
-  "sourceRefs",
-  "targetRef",
-  "taskContractRef",
-  "traceRef",
-  "toolEventRefs",
-  "userReportRef",
-  "verificationRefs",
-  "workPlanRef",
-  "workPlanRefs",
-  "workResultRefs",
-]);
-
-function collectArtifactReferences(
-  value: unknown,
-  path = "body",
-  key = "",
-): LocatedReference[] {
-  if (typeof value === "string") {
-    return referenceFieldNames.has(key) &&
-      /^(?:artifact|repo|trace):\/\//u.test(value)
-      ? [{ ref: value, path }]
-      : [];
-  }
-  if (Array.isArray(value)) {
-    return value.flatMap((item, index) =>
-      collectArtifactReferences(item, `${path}[${index}]`, key),
-    );
-  }
-  if (typeof value !== "object" || value === null) return [];
-  return Object.entries(value).flatMap(([childKey, child]) =>
-    collectArtifactReferences(child, `${path}.${childKey}`, childKey),
-  );
-}
-
-const fixedProducerByType: Readonly<Record<string, string>> = {
-  ContextManifest: "controller",
-  Evidence: "executor",
-  ProblemFrame: "scenario_author",
-  PromptReview: "scenario_author",
-  QualityReview: "quality_controller",
-  ReleaseAudit: "release_auditor",
-  ReceiptAudit: "controller",
-  RunEnvelope: "controller",
-  ScenarioSpec: "scenario_author",
-  TaskContract: "task_compiler",
-  TraceEvent: "controller",
-  UserReport: "release_auditor",
-  WorkPlan: "quality_controller",
-  WorkResult: "executor",
-};
-
-function expectedProducer(run: RunRecord, type: string): string {
-  if (type === "ClarificationRequest") return roleByPhase[run.phase];
-  return fixedProducerByType[type] ?? roleByPhase[run.phase];
-}
-
 function requireObjectBody(body: unknown): Record<string, unknown> {
   if (typeof body !== "object" || body === null || Array.isArray(body)) {
     throw new Error("Artifact body must be an object");
   }
   return body as Record<string, unknown>;
-}
-
-interface WorkNodeProjection {
-  id: string;
-  dependsOn: string[];
-  inputRefs?: string[];
-  contextRefs?: string[];
-  allowedTools?: string[];
-  requiredCapabilities?: string[];
-  acceptanceCriteria?: string[];
-  permissions?: StructuredPermissionSet;
-  budgets?: {
-    maximumToolCalls?: number;
-    maximumChildren?: number;
-  };
-}
-
-interface WorkPlanProjection {
-  id: string;
-  nodes: WorkNodeProjection[];
 }
 
 interface ArtifactProjection {
@@ -605,158 +505,6 @@ const potentiallyMutatingPlanCapabilities = new Set([
   "subagent.spawn",
 ]);
 
-function requiresDirectEvidence(
-  path: string,
-  submissionType?: string,
-): boolean {
-  return (
-    (submissionType === "WorkResult" &&
-      (/^body\.evidenceRefs\[\d+\]$/u.test(path) ||
-        /^body\.actions\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path))) ||
-    /\.claimEvidenceMatrix\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) ||
-    /\.completionClaims\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) ||
-    /\.observations\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) ||
-    /\.inferences\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) ||
-    /\.toolEventRefs\[\d+\]$/u.test(path) ||
-    /\.verificationRefs\[\d+\]$/u.test(path) ||
-    /\.diagnosisGate\.directEvidenceRefs\[\d+\]$/u.test(path) ||
-    /\.acceptanceCoverage\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) ||
-    /\.acceptanceResults\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) ||
-    /\.filesChanged\[\d+\]\.diffRef$/u.test(path) ||
-    /\.testResults\[\d+\]\.(?:commandRef|outputRef)$/u.test(path) ||
-    /\.verificationResults\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) ||
-    /\.(?:ruleCompliance|regressionChecks|userFidelity)\[\d+\]\.evidenceRefs\[\d+\]$/u.test(
-      path,
-    ) ||
-    (submissionType === "QualityReview" &&
-      /\.hardGates\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path))
-  );
-}
-
-const directEvidenceArtifactTypes = new Set([
-  "Evidence",
-  "ContextDocument",
-  "TraceEvent",
-]);
-
-const directEvidenceTraceEventTypes = new Set<string>();
-
-function evidenceKindsForCapability(capability: string): ReadonlySet<string> {
-  switch (capability) {
-    case "repository.read":
-      return new Set(["repository", "diff", "tool_output"]);
-    case "repository.write":
-    case "repository.delete":
-      return new Set(["diff"]);
-    case "shell.inspect":
-    case "shell.execute":
-      return new Set(["tool_output", "log", "test"]);
-    case "runtime.inspect":
-    case "runtime.restart":
-      return new Set(["runtime", "log", "tool_output"]);
-    case "browser.inspect":
-    case "browser.mutate":
-      return new Set(["browser"]);
-    case "network.read":
-    case "external.write":
-    case "subagent.spawn":
-      return new Set(["tool_output"]);
-    default:
-      return new Set();
-  }
-}
-
-class PermissionAuthorizationError extends Error {
-  constructor(
-    message: string,
-    readonly permissionDecision: TracePermissionDecision,
-    readonly inputRefs: string[],
-  ) {
-    super(message);
-    this.name = "PermissionAuthorizationError";
-  }
-}
-
-function expectedReferenceType(path: string): string | null {
-  if (path.endsWith(".originalRequestRef")) return "UserMessage";
-  if (path.endsWith(".problemFrameRef")) return "ProblemFrame";
-  if (path.endsWith(".targetRef")) return "TaskContract";
-  if (path.endsWith(".taskContractRef")) return "TaskContract";
-  if (/\.workPlanRefs?(?:\[\d+\])?$/u.test(path)) return "WorkPlan";
-  if (/\.workResultRefs\[\d+\]$/u.test(path)) return "WorkResult";
-  if (path.endsWith(".qualityReviewRef")) return "QualityReview";
-  if (path.endsWith(".contextManifestRef")) return "ContextManifest";
-  if (path.endsWith(".clarificationRequestRef")) return "ClarificationRequest";
-  return null;
-}
-
-const systemReferenceFields = new Set([
-  "applicableRuleRefs",
-  "instructionRef",
-  "policyRefs",
-  "promptReadinessRubricRef",
-  "ruleRefs",
-]);
-
-const knownSystemReferencePatterns = [
-  /^artifact:\/\/system\/roles\/(?:controller|scenario[_-]author(?:-micro)?|task[_-]compiler|quality[_-]controller(?:-spot)?|executor|release[_-]auditor)-v1$/u,
-  /^artifact:\/\/system\/rubrics\/contract-readiness-v1$/u,
-];
-
-function isKnownSystemReference(reference: string): boolean {
-  return knownSystemReferencePatterns.some((pattern) =>
-    pattern.test(reference),
-  );
-}
-
-function terminalField(path: string): string {
-  return /\.([A-Za-z][A-Za-z0-9]*)(?:\[\d+\])?$/u.exec(path)?.[1] ?? "";
-}
-
-function isUserReportedEvidencePath(
-  submission: ArtifactSubmission,
-  path: string,
-): boolean {
-  if (submission.type === "ReleaseAudit") {
-    const match =
-      /^body\.claimEvidenceMatrix\[(\d+)\]\.evidenceRefs\[\d+\]$/u.exec(path);
-    const matrix =
-      typeof submission.body === "object" &&
-      submission.body !== null &&
-      "claimEvidenceMatrix" in submission.body
-        ? (submission.body as { claimEvidenceMatrix?: unknown })
-            .claimEvidenceMatrix
-        : null;
-    return (
-      match !== null &&
-      Array.isArray(matrix) &&
-      typeof matrix[Number(match[1])] === "object" &&
-      matrix[Number(match[1])] !== null &&
-      (matrix[Number(match[1])] as { basis?: unknown }).basis ===
-        "user_reported"
-    );
-  }
-  if (submission.type === "UserReport") {
-    const match =
-      /^body\.completionClaims\[(\d+)\]\.evidenceRefs\[\d+\]$/u.exec(path);
-    const claims =
-      typeof submission.body === "object" &&
-      submission.body !== null &&
-      "completionClaims" in submission.body
-        ? (submission.body as { completionClaims?: unknown }).completionClaims
-        : null;
-    return (
-      match !== null &&
-      Array.isArray(claims) &&
-      typeof claims[Number(match[1])] === "object" &&
-      claims[Number(match[1])] !== null &&
-      (claims[Number(match[1])] as { status?: unknown }).status ===
-        "user_reported"
-    );
-  }
-  return false;
-}
-
 function equalStringSets(
   left: readonly string[],
   right: readonly string[],
@@ -766,40 +514,6 @@ function equalStringSets(
     new Set(left).size === left.length &&
     left.every((item) => right.includes(item))
   );
-}
-
-function tracePermissionDecision(
-  action: Record<string, unknown>,
-  allowed: boolean,
-  policyRefs: string[],
-  rationaleSummary: string,
-): TracePermissionDecision {
-  const capability =
-    typeof action.capability === "string" ? action.capability : "unknown";
-  const rawTarget =
-    typeof action.target === "string" ? action.target : "unknown";
-  let scope = rawTarget;
-  if (
-    (capability === "network.read" || capability === "external.write") &&
-    rawTarget !== "unknown"
-  ) {
-    try {
-      const parsed = new URL(
-        rawTarget.includes("://") ? rawTarget : `http://${rawTarget}`,
-      );
-      scope =
-        normalizeNetworkReadDomain(parsed.hostname) ?? "invalid_network_target";
-    } catch {
-      scope = "invalid_network_target";
-    }
-  }
-  return {
-    decision: allowed ? "allow" : "deny",
-    capability,
-    scope,
-    policyRefs,
-    rationaleSummary,
-  };
 }
 
 export class RunController {
@@ -1608,149 +1322,19 @@ export class RunController {
       });
   }
 
-  private assertScopedWorkOrder(
-    orderValue: unknown,
-    options: {
-      label: string;
-      criterionField: "targetCriterionIds" | "failedCriterionIds";
-      allowedCriteria: readonly string[];
-      contractPermissions: StructuredPermissionSet;
-      authorizedPermissions: StructuredPermissionSet;
-      eligibleSourceRefs: ReadonlySet<string>;
-      requireAllCriteria?: boolean;
-      requireExecutableCapability?: boolean;
-    },
-  ): void {
-    if (
-      typeof orderValue !== "object" ||
-      orderValue === null ||
-      Array.isArray(orderValue)
-    ) {
-      throw new Error(`${options.label} must be a typed scoped work order`);
-    }
-    const order = orderValue as Record<string, unknown>;
-    const criterionIds = stringArray(order[options.criterionField]);
-    if (
-      criterionIds.length === 0 ||
-      new Set(criterionIds).size !== criterionIds.length ||
-      criterionIds.some(
-        (criterion) => !options.allowedCriteria.includes(criterion),
-      )
-    ) {
-      throw new Error(`${options.label} contains invalid contract criteria`);
-    }
-    if (
-      options.requireAllCriteria === true &&
-      !equalStringSets(criterionIds, options.allowedCriteria)
-    ) {
-      throw new Error(
-        `${options.label} must cover every authorized criterion exactly once`,
-      );
-    }
-    const permissions = permissionSet(
-      order.permissions,
-      `${options.label} permissions`,
-    );
-    if (
-      !permissionSetIsSubset(permissions, options.contractPermissions) ||
-      !permissionSetIsSubset(permissions, options.authorizedPermissions)
-    ) {
-      throw new Error(`${options.label} permissions exceed authorization`);
-    }
-    const capabilities = stringArray(order.allowedCapabilities);
-    if (
-      options.requireExecutableCapability === true &&
-      capabilities.length === 0
-    ) {
-      throw new Error(
-        `${options.label} requires at least one executable capability`,
-      );
-    }
-    if (
-      capabilities.some(
-        (capability) => !permissionAllowsCapability(permissions, capability),
-      )
-    ) {
-      throw new Error(
-        `${options.label} capabilities are not permission-backed`,
-      );
-    }
-    if (
-      !stringArray(order.sourceRefs).some((reference) =>
-        options.eligibleSourceRefs.has(reference),
-      )
-    ) {
-      throw new Error(`${options.label} lacks current supporting evidence`);
-    }
-  }
-
   private workResultPermissionEvents(
     run: RunRecord,
     body: Record<string, unknown>,
   ) {
-    const node = this.executionProgress(run.runId).pendingNode;
-    if (!node) return [];
-    const nodePermissions = permissionSet(
-      node.permissions,
-      `Work node ${node.id} permissions`,
+    return buildWorkResultPermissionEvents(
+      run,
+      body,
+      this.executionProgress(run.runId).pendingNode,
+      [
+        this.latestRef(run.runId, "TaskContract"),
+        this.latestRef(run.runId, "WorkPlan"),
+      ],
     );
-    const policies = [
-      policyForMode(run.requestedMode),
-      policyFromPermissionSet(`work_node:${node.id}`, nodePermissions),
-    ];
-    const policyRefs = [
-      this.latestRef(run.runId, "TaskContract"),
-      this.latestRef(run.runId, "WorkPlan"),
-    ];
-    const actions = Array.isArray(body.actions)
-      ? (body.actions as Array<Record<string, unknown>>)
-      : [];
-    return actions
-      .filter(
-        (action) =>
-          action.status === "completed" ||
-          action.status === "failed" ||
-          action.status === "denied",
-      )
-      .map((action) => {
-        const kind =
-          typeof action.capability === "string"
-            ? actionKindForCapability(action.capability)
-            : null;
-        const allowedTool =
-          typeof action.capability === "string" &&
-          (node.allowedTools ?? []).includes(action.capability);
-        const decision =
-          kind && allowedTool
-            ? authorizeAction(
-                {
-                  kind,
-                  ...(typeof action.target === "string"
-                    ? { target: action.target }
-                    : {}),
-                },
-                policies,
-                run.repositoryRoot,
-              )
-            : {
-                allowed: false,
-                summary: `Denied: capability is outside work node ${node.id}.`,
-              };
-        const permissionDecision = tracePermissionDecision(
-          action,
-          decision.allowed,
-          policyRefs,
-          decision.summary,
-        );
-        return {
-          actor: "controller",
-          eventType: "permission_checked",
-          phase: run.phase,
-          inputRefs: policyRefs,
-          permissionDecision,
-          decisionSummary: `${permissionDecision.decision === "allow" ? "Allowed" : "Denied"} ${permissionDecision.capability} for ${permissionDecision.scope}.`,
-        };
-      });
   }
 
   private assertCrossArtifactInvariants(
@@ -2180,420 +1764,22 @@ export class RunController {
     }
 
     if (submission.type === "WorkPlan") {
-      const contractRef = this.latestRef(run.runId, "TaskContract");
-      if (body.taskContractRef !== contractRef) {
-        throw new Error("WorkPlan must target the current TaskContract");
-      }
-      if (body.planValidation !== "valid") {
-        throw new Error(
-          "Only a validated WorkPlan may enter execution or review",
-        );
-      }
-      if (body.executionMode !== "serial") {
-        throw new Error(
-          "The current controller supports deterministic serial WorkPlans only",
-        );
-      }
-      const contract = this.latestBody(run.runId, "TaskContract")!;
-      const contractPermissions = permissionSet(
-        contract.permissions,
-        "TaskContract permissions",
-      );
-      const criterionRecords = Array.isArray(contract.acceptanceCriteria)
-        ? contract.acceptanceCriteria.filter(
-            (criterion): criterion is Record<string, unknown> =>
-              typeof criterion === "object" && criterion !== null,
-          )
-        : [];
-      const criteria = new Set(
-        criterionRecords
-          .map((criterion) => criterion.id)
-          .filter((id): id is string => typeof id === "string"),
-      );
-      const criterionStages = new Map(
-        criterionRecords
-          .filter(
-            (criterion) =>
-              typeof criterion.id === "string" &&
-              typeof criterion.stage === "string",
-          )
-          .map((criterion) => [
-            criterion.id as string,
-            criterion.stage as string,
-          ]),
-      );
-      const nodes = Array.isArray(body.nodes)
-        ? (body.nodes as unknown as WorkNodeProjection[])
-        : [];
-      const globalBudgets =
-        typeof body.globalBudgets === "object" && body.globalBudgets !== null
-          ? (body.globalBudgets as Record<string, unknown>)
-          : {};
-      const requestedToolCalls = nodes.reduce((sum, node) => {
-        const budgets = (
-          node as unknown as { budgets?: { maximumToolCalls?: unknown } }
-        ).budgets;
-        return (
-          sum +
-          (typeof budgets?.maximumToolCalls === "number"
-            ? budgets.maximumToolCalls
-            : 0)
-        );
-      }, 0);
-      if (
-        typeof globalBudgets.maximumToolCalls !== "number" ||
-        requestedToolCalls > globalBudgets.maximumToolCalls
-      ) {
-        throw new Error("WorkPlan node tool budgets exceed the global budget");
-      }
-      const priorPlanToolCalls = this.ledger
-        .listArtifacts(run.runId)
-        .filter(
-          (artifact) =>
-            artifact.type === "WorkPlan" && artifact.id !== submission.id,
-        )
-        .reduce((sum, artifact) => {
-          const prior = this.ledger.getArtifact(run.runId, artifact.id)?.body;
-          const nodes =
-            typeof prior === "object" &&
-            prior !== null &&
-            "nodes" in prior &&
-            Array.isArray(prior.nodes)
-              ? (prior.nodes as Array<Record<string, unknown>>)
-              : [];
-          return (
-            sum +
-            nodes.reduce((nodeSum, node) => {
-              const budgets = node.budgets;
-              return (
-                nodeSum +
-                (typeof budgets === "object" &&
-                budgets !== null &&
-                "maximumToolCalls" in budgets &&
-                typeof budgets.maximumToolCalls === "number"
-                  ? budgets.maximumToolCalls
-                  : 0)
-              );
-            }, 0)
-          );
-        }, 0);
-      if (priorPlanToolCalls + requestedToolCalls > MAX_TOOL_CALLS_PER_RUN) {
-        throw new Error(
-          `WorkPlan exceeds the cumulative run tool-call budget of ${String(MAX_TOOL_CALLS_PER_RUN)}`,
-        );
-      }
-      const envelopeBudgets =
-        typeof envelope.budgets === "object" && envelope.budgets !== null
-          ? (envelope.budgets as Record<string, unknown>)
-          : {};
-      if (
-        typeof globalBudgets.maximumParallelWorkers !== "number" ||
-        typeof globalBudgets.maximumSubagentDepth !== "number" ||
-        globalBudgets.maximumParallelWorkers >
-          (typeof envelopeBudgets.maximumParallelWorkers === "number"
-            ? envelopeBudgets.maximumParallelWorkers
-            : 1) ||
-        globalBudgets.maximumSubagentDepth >
-          (typeof envelopeBudgets.maximumSubagentDepth === "number"
-            ? envelopeBudgets.maximumSubagentDepth
-            : 0)
-      ) {
-        throw new Error("WorkPlan concurrency exceeds immutable host budgets");
-      }
-      const latestControlRecord = [...this.ledger.listArtifacts(run.runId)]
-        .reverse()
-        .find(
-          (artifact) =>
-            artifact.type === "QualityReview" ||
-            artifact.type === "ReleaseAudit",
-        );
-      const latestControl = latestControlRecord
-        ? this.ledger.getArtifact(run.runId, latestControlRecord.id)?.body
-        : null;
-      const remediationControl =
-        typeof latestControl === "object" &&
-        latestControl !== null &&
-        (latestControl as { decision?: unknown }).decision === "remediate"
-          ? (latestControl as Record<string, unknown>)
-          : null;
-      const correctionControl =
-        latestControlRecord?.type === "QualityReview" &&
-        typeof latestControl === "object" &&
-        latestControl !== null &&
-        (latestControl as { decision?: unknown }).decision === "proceed_to_fix"
-          ? (latestControl as Record<string, unknown>)
-          : null;
-      const planCeiling =
-        run.requestedMode === "analyze_and_fix" &&
-        !this.analysisFixUnlocked(run.runId) &&
-        correctionControl === null
-          ? explicitPermissionProjection("analyze_only", envelope)
-          : contractPermissions;
-      let scopedCriteria: string[] | null = null;
-      if ((remediationControl || correctionControl) && latestControlRecord) {
-        const workOrder = correctionControl
-          ? typeof correctionControl.diagnosisGate === "object" &&
-            correctionControl.diagnosisGate !== null
-            ? (correctionControl.diagnosisGate as Record<string, unknown>)
-                .correctionWorkOrder
-            : null
-          : latestControlRecord.type === "QualityReview"
-            ? remediationControl!.remediationWorkOrder
-            : remediationControl!.remediationDefect;
-        if (typeof workOrder !== "object" || workOrder === null) {
-          throw new Error("Scoped replanning is missing its typed work order");
-        }
-        const projectedOrder = workOrder as Record<string, unknown>;
-        scopedCriteria = correctionControl
-          ? stringArray(projectedOrder.targetCriterionIds)
-          : stringArray(projectedOrder.failedCriterionIds);
-        const controllingRef = `artifact://${run.runId}/${latestControlRecord.id}`;
-        if (
-          nodes.some(
-            (node) => !stringArray(node.inputRefs).includes(controllingRef),
-          )
-        ) {
-          throw new Error(
-            "Every scoped node must reference its controlling review or audit",
-          );
-        }
-        if (
-          typeof projectedOrder.maximumToolCalls !== "number" ||
-          typeof globalBudgets.maximumToolCalls !== "number" ||
-          globalBudgets.maximumToolCalls > projectedOrder.maximumToolCalls
-        ) {
-          throw new Error("Scoped WorkPlan exceeds its work-order tool budget");
-        }
-        const allowedCapabilities = new Set(
-          stringArray(projectedOrder.allowedCapabilities),
-        );
-        if (
-          nodes.some((node) =>
-            (node.allowedTools ?? []).some(
-              (capability) => !allowedCapabilities.has(capability),
-            ),
-          )
-        ) {
-          throw new Error(
-            "Scoped WorkPlan uses capabilities outside its work order",
-          );
-        }
-        const scopedPermissions = permissionSet(
-          projectedOrder.permissions,
-          "Scoped work-order permissions",
-        );
-        for (const node of nodes) {
-          if (
-            !permissionSetIsSubset(
-              permissionSet(
-                node.permissions,
-                `Work node ${node.id} permissions`,
-              ),
-              scopedPermissions,
-            )
-          ) {
-            throw new Error(`Work node ${node.id} exceeds scoped permissions`);
-          }
-        }
-      }
-      const coveredCriteria = new Set<string>();
-      for (const node of nodes) {
-        const nodePermissions = permissionSet(
-          node.permissions,
-          `Work node ${node.id} permissions`,
-        );
-        if (!permissionSetIsSubset(nodePermissions, contractPermissions)) {
-          throw new Error(
-            `Work node ${node.id} permissions exceed the TaskContract`,
-          );
-        }
-        if (!permissionSetIsSubset(nodePermissions, planCeiling)) {
-          throw new Error(
-            `Work node ${node.id} attempts mutation before the diagnosis review gate`,
-          );
-        }
-        if (
-          (node.budgets?.maximumChildren ?? 0) >
-          nodePermissions.subagents.maximumChildren
-        ) {
-          throw new Error(
-            `Work node ${node.id} child budget exceeds its subagent permission`,
-          );
-        }
-        if (
-          nodePermissions.subagents.maximumDepth >
-            (globalBudgets.maximumSubagentDepth as number) ||
-          (nodePermissions.subagents.spawn &&
-            (globalBudgets.maximumSubagentDepth as number) === 0)
-        ) {
-          throw new Error(
-            `Work node ${node.id} subagent depth exceeds the WorkPlan or host budget`,
-          );
-        }
-        for (const capability of node.allowedTools ?? []) {
-          if (!permissionAllowsCapability(nodePermissions, capability)) {
-            throw new Error(
-              `Work node ${node.id} tool ${capability} is not permission-backed`,
-            );
-          }
-        }
-        const requiredCapabilities = node.requiredCapabilities ?? [];
-        const uniqueRequiredCapabilities = new Set(requiredCapabilities);
-        if (uniqueRequiredCapabilities.size !== requiredCapabilities.length) {
-          throw new Error(
-            `Work node ${node.id} required capabilities must be unique`,
-          );
-        }
-        if (
-          run.requestedMode !== "report_only" &&
-          run.requestedMode !== "plan_only" &&
-          requiredCapabilities.length === 0
-        ) {
-          throw new Error(
-            `Executable work node ${node.id} requires at least one completion capability`,
-          );
-        }
-        if (
-          requiredCapabilities.some(
-            (capability) => !(node.allowedTools ?? []).includes(capability),
-          )
-        ) {
-          throw new Error(
-            `Work node ${node.id} requires a capability outside its allowed tools`,
-          );
-        }
-        if (
-          (node.budgets?.maximumToolCalls ?? 0) <
-          uniqueRequiredCapabilities.size
-        ) {
-          throw new Error(
-            `Work node ${node.id} tool budget cannot satisfy its required capabilities`,
-          );
-        }
-        if (
-          uniqueRequiredCapabilities.has("subagent.spawn") &&
-          (node.budgets?.maximumChildren ?? 0) < 1
-        ) {
-          throw new Error(
-            `Work node ${node.id} requires a child budget for subagent.spawn`,
-          );
-        }
-        for (const criterion of node.acceptanceCriteria ?? []) {
-          if (!criteria.has(criterion)) {
-            throw new Error(
-              `Work node ${node.id} invents acceptance criterion ${criterion}`,
-            );
-          }
-          if (scopedCriteria && !scopedCriteria.includes(criterion)) {
-            throw new Error(
-              `Scoped node ${node.id} exceeds its authorized criteria`,
-            );
-          }
-          if (
-            run.requestedMode === "analyze_and_fix" &&
-            !this.analysisFixUnlocked(run.runId) &&
-            correctionControl === null &&
-            criterionStages.get(criterion) !== "diagnosis"
-          ) {
-            throw new Error(
-              `Initial diagnosis node ${node.id} cannot claim completion criterion ${criterion}`,
-            );
-          }
-          coveredCriteria.add(criterion);
-        }
-      }
-      const initialDiagnosisCriteria = criterionRecords
-        .filter((criterion) => criterion.stage === "diagnosis")
-        .map((criterion) => criterion.id)
-        .filter((id): id is string => typeof id === "string");
-      const requiredPlanCriteria =
-        scopedCriteria ??
-        (run.requestedMode === "analyze_and_fix" &&
-        !this.analysisFixUnlocked(run.runId)
-          ? initialDiagnosisCriteria
-          : [...criteria]);
-      if (
-        requiredPlanCriteria.length > 0 &&
-        !requiredPlanCriteria.every((criterion) =>
-          coveredCriteria.has(criterion),
-        )
-      ) {
-        throw new Error(
-          scopedCriteria
-            ? "Scoped WorkPlan must cover every authorized criterion"
-            : "WorkPlan must cover every TaskContract acceptance criterion",
-        );
-      }
-      const requiredVerificationStage =
-        run.requestedMode === "analyze_and_fix"
-          ? correctionControl !== null || this.analysisFixUnlocked(run.runId)
-            ? "completion"
-            : "diagnosis"
-          : null;
-      const requiredVerifications = Array.isArray(
-        contract.verificationRequirements,
-      )
-        ? (contract.verificationRequirements as Array<Record<string, unknown>>)
-            .filter((requirement) => requirement.required === true)
-            .filter(
-              (requirement) =>
-                requiredVerificationStage === null ||
-                requirement.stage === requiredVerificationStage,
-            )
-        : [];
-      const nodesById = new Map(nodes.map((node) => [node.id, node]));
-      const ancestorIdsByNode = new Map<string, Set<string>>();
-      for (const node of nodes) {
-        const pending = [...node.dependsOn];
-        const ancestors = new Set<string>();
-        while (pending.length > 0) {
-          const current = pending.pop()!;
-          if (ancestors.has(current)) continue;
-          ancestors.add(current);
-          pending.push(...(nodesById.get(current)?.dependsOn ?? []));
-        }
-        ancestorIdsByNode.set(node.id, ancestors);
-      }
-      const mutatingNodes = nodes.filter((node) =>
-        (node.allowedTools ?? []).some((capability) =>
-          potentiallyMutatingPlanCapabilities.has(capability),
-        ),
-      );
-      for (const requirement of requiredVerifications) {
-        const capability = requirement.capability;
-        const stage = requirement.stage;
-        const verificationNodes =
-          typeof capability === "string" &&
-          typeof stage === "string" &&
-          nodes.filter(
-            (node) =>
-              (node.requiredCapabilities ?? []).includes(capability) &&
-              (node.acceptanceCriteria ?? []).some(
-                (criterion) => criterionStages.get(criterion) === stage,
-              ),
-          );
-        if (!verificationNodes || verificationNodes.length === 0) {
-          throw new Error(
-            `Required verification ${String(requirement.id)} using ${String(capability)} is not scheduled by a same-stage WorkPlan node`,
-          );
-        }
-        if (stage === "completion") {
-          for (const verificationNode of verificationNodes) {
-            for (const mutatingNode of mutatingNodes) {
-              if (
-                verificationNode.id !== mutatingNode.id &&
-                !ancestorIdsByNode
-                  .get(verificationNode.id)
-                  ?.has(mutatingNode.id)
-              ) {
-                throw new Error(
-                  `Completion verification ${String(requirement.id)} must run after mutating node ${mutatingNode.id}`,
-                );
-              }
-            }
-          }
-        }
-      }
+      assertWorkPlanSubmission({
+        run,
+        submissionId: submission.id,
+        body,
+        envelope:
+          typeof envelope === "object" && envelope !== null
+            ? (envelope as Record<string, unknown>)
+            : {},
+        latestRef: (runId, type) => this.latestRef(runId, type),
+        latestContractBody: this.latestBody(run.runId, "TaskContract")!,
+        analysisFixUnlocked: (runId) => this.analysisFixUnlocked(runId),
+        listArtifacts: (runId) => this.ledger.listArtifacts(runId),
+        getArtifactBody: (runId, artifactId) =>
+          this.ledger.getArtifact(runId, artifactId)?.body,
+        explicitPermissionProjection,
+      });
       return;
     }
 
@@ -3362,7 +2548,7 @@ export class RunController {
           typeof body.diagnosisGate === "object" && body.diagnosisGate !== null
             ? (body.diagnosisGate as Record<string, unknown>)
             : null;
-        this.assertScopedWorkOrder(gate?.correctionWorkOrder, {
+        assertScopedWorkOrder(gate?.correctionWorkOrder, {
           label: "Diagnosis correction work order",
           criterionField: "targetCriterionIds",
           allowedCriteria: criterionRecords
@@ -3381,7 +2567,7 @@ export class RunController {
           .filter((criterion) => criterion.stage === "diagnosis")
           .map((criterion) => criterion.id)
           .filter((id): id is string => typeof id === "string");
-        this.assertScopedWorkOrder(body.remediationWorkOrder, {
+        assertScopedWorkOrder(body.remediationWorkOrder, {
           label: "Quality remediation work order",
           criterionField: "failedCriterionIds",
           allowedCriteria:
@@ -3515,7 +2701,7 @@ export class RunController {
         throw new Error("ReleaseAudit claim matrix invents contract criteria");
       }
       if (body.decision === "remediate") {
-        this.assertScopedWorkOrder(body.remediationDefect, {
+        assertScopedWorkOrder(body.remediationDefect, {
           label: "Release remediation defect",
           criterionField: "failedCriterionIds",
           allowedCriteria: expectedCriteria,

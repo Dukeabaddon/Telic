@@ -6,6 +6,8 @@ import { inspectRunReplay, SqliteLedger } from "@telic/core";
 import { defaultStateDirectory, startStdioServer } from "@telic/mcp";
 
 import { evaluateBrokerGate } from "./broker-gate.js";
+import { gcUsage, runGc } from "./gc.js";
+import { purgeRunUsage, runPurgeRun } from "./purge-run.js";
 
 export interface CliIo {
   stdout: (line: string) => void;
@@ -41,6 +43,8 @@ function usage(): string {
     "  telic trace RUN_ID [--repo PATH] [--json]",
     "  telic artifact RUN_ID ARTIFACT_ID [--repo PATH] [--json]",
     "  telic replay RUN_ID [--repo PATH] [--json]",
+    purgeRunUsage(),
+    gcUsage(),
     "  telic broker-gate [--repo PATH]",
     "  telic mcp",
     "",
@@ -153,11 +157,24 @@ export async function runCli(
       return 0;
     }
 
+    if (command === "gc") {
+      const dryRun = args.includes("--dry-run");
+      const ledger = openExistingLedger(repository);
+      try {
+        return runGc(ledger, { dryRun, json }, io);
+      } finally {
+        ledger.close();
+      }
+    }
+
     const runId = args[0];
     if (!runId || runId.startsWith("--"))
       throw new Error(`${command} requires RUN_ID`);
     const ledger = openExistingLedger(repository);
     try {
+      if (command === "purge-run") {
+        return runPurgeRun(ledger, runId, json, io);
+      }
       if (command === "replay") {
         const run = ledger.requireRun(runId);
         io.stdout(render(inspectRunReplay(ledger, run), json));

@@ -1,5 +1,6 @@
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -114,6 +115,13 @@ function createRun(): RunRecord {
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
   };
+}
+
+function blobPathForDigest(ledger: SqliteLedger, digest: string): string {
+  const hex = digest.startsWith("sha256:")
+    ? digest.slice("sha256:".length)
+    : digest;
+  return join(ledger.blobDirectory, hex.slice(0, 2), hex.slice(2));
 }
 
 function createLedger(): SqliteLedger {
@@ -483,5 +491,94 @@ describe("SQLite ledger and content-addressed artifacts", () => {
       },
     );
     expect(ledger.requireRun("legacy-run").phase).toBe("agent_1_frame");
+  });
+
+  it("purgeRun removes run data and unreferenced blobs", () => {
+    const ledger = createLedger();
+    const run = createRun();
+    const request: ArtifactSubmission = {
+      id: "request-1",
+      runId: run.runId,
+      type: "UserMessage",
+      schemaVersion: "1.0",
+      producer: "user",
+      body: { content: "purge me" },
+    };
+    ledger.createRun(run, [request]);
+    const artifact = ledger.getArtifact(run.runId, request.id);
+    expect(artifact).not.toBeNull();
+    const digest = artifact?.sha256;
+    expect(digest).toBeTruthy();
+
+    const result = ledger.purgeRun(run.runId);
+    expect(result.deletedArtifactCount).toBe(1);
+    expect(result.deletedTraceEventCount).toBe(1);
+    expect(result.deletedBlobDigests).toEqual([digest]);
+    expect(ledger.getRun(run.runId)).toBeNull();
+    expect(existsSync(blobPathForDigest(ledger, digest!))).toBe(false);
+  });
+
+  it("purgeRun keeps blobs still referenced by another run", () => {
+    const ledger = createLedger();
+    const sharedBody = { content: "shared blob" };
+    const first = createRun();
+    const second = {
+      ...createRun(),
+      runId: "00000000-0000-4000-8000-000000000002",
+    };
+    const firstRequest: ArtifactSubmission = {
+      id: "request-1",
+      runId: first.runId,
+      type: "UserMessage",
+      schemaVersion: "1.0",
+      producer: "user",
+      body: sharedBody,
+    };
+    const secondRequest: ArtifactSubmission = {
+      ...firstRequest,
+      id: "request-2",
+      runId: second.runId,
+    };
+    ledger.createRun(first, [firstRequest]);
+    ledger.createRun(second, [secondRequest]);
+    const digest = ledger.getArtifact(first.runId, firstRequest.id)?.sha256;
+    expect(digest).toBeTruthy();
+
+    const result = ledger.purgeRun(first.runId);
+    expect(result.deletedBlobDigests).toEqual([]);
+    expect(existsSync(blobPathForDigest(ledger, digest!))).toBe(true);
+    expect(ledger.getRun(second.runId)).not.toBeNull();
+  });
+
+  it("collectOrphanBlobs reports and removes orphan blobs", () => {
+    const ledger = createLedger();
+    const run = createRun();
+    const request: ArtifactSubmission = {
+      id: "request-1",
+      runId: run.runId,
+      type: "UserMessage",
+      schemaVersion: "1.0",
+      producer: "user",
+      body: { content: "gc me" },
+    };
+    ledger.createRun(run, [request]);
+    const digest = ledger.getArtifact(run.runId, request.id)?.sha256;
+    expect(digest).toBeTruthy();
+    const blobPath = blobPathForDigest(ledger, digest!);
+    expect(existsSync(blobPath)).toBe(true);
+    ledger.purgeRun(run.runId);
+    expect(existsSync(blobPath)).toBe(false);
+
+    writeFileSync(blobPath, "{}", { encoding: "utf8", mode: 0o600 });
+    expect(existsSync(blobPath)).toBe(true);
+
+    const dryRun = ledger.collectOrphanBlobs({ dryRun: true });
+    expect(dryRun.orphanDigests).toEqual([digest]);
+    expect(dryRun.removedDigests).toEqual([]);
+    expect(existsSync(blobPath)).toBe(true);
+
+    const removed = ledger.collectOrphanBlobs();
+    expect(removed.removedDigests).toEqual([digest]);
+    expect(existsSync(blobPath)).toBe(false);
   });
 });

@@ -51,5 +51,7 @@ describe("Telic CLI", () => {
     const output = capture();
     expect(await runCli(["--help"], output.io)).toBe(0);
     expect(output.stdout.join("\n")).toContain("telic doctor");
+    expect(output.stdout.join("\n")).toContain("telic purge-run");
+    expect(output.stdout.join("\n")).toContain("telic gc");
   });
 });

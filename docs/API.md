@@ -280,6 +280,8 @@ telic status RUN_ID [--repo PATH] [--json]
 telic trace RUN_ID [--repo PATH] [--json]
 telic artifact RUN_ID ARTIFACT_ID [--repo PATH] [--json]
 telic replay RUN_ID [--repo PATH] [--json]
+telic purge-run RUN_ID [--repo PATH] [--json]
+telic gc [--repo PATH] [--dry-run] [--json]
 telic broker-gate [--repo PATH]
 telic mcp
 ```
@@ -303,7 +305,9 @@ budget must cover its unique required capabilities; a required `subagent.spawn`
 also needs a positive child budget. These are safety/storage limits, not an
 automatic retention policy.
 
-There is no per-run deletion command yet. To remove all Telic state for a repository, first stop every Telic process using that state directory, confirm the path reported by `doctor --json`, and remove that directory with normal OS tools. This is irreversible and deletes all runs for that repository.
+`telic purge-run RUN_ID` deletes one run's ledger rows and any blob bodies that become unreferenced. `telic gc` scans the content store for orphan blobs and removes them; pass `--dry-run` to list candidates without deleting files.
+
+To remove all Telic state for a repository, first stop every Telic process using that state directory, confirm the path reported by `doctor --json`, and remove that directory with normal OS tools. This is irreversible and deletes all runs for that repository.
 
 ## API limitations
 
@@ -314,5 +318,5 @@ There is no per-run deletion command yet. To remove all Telic state for a reposi
   config and transport checks but lack real-host lifecycle certification.
 - State integrity is designed for local correctness, not hostile same-user tamper resistance.
 - Trace responses are indexed and paginated, but age-based retention,
-  automatic orphan-blob collection, and supported per-run deletion remain
-  release work.
+  and age-based retention remain release work. Per-run deletion and orphan-blob
+  collection are available via `telic purge-run` and `telic gc`.

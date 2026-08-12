@@ -7,6 +7,7 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   renameSync,
   rmSync,
@@ -140,6 +141,19 @@ export type SupportingArtifactQuota =
       maximum: number;
       errorMessage: string;
     };
+
+export interface PurgeRunResult {
+  runId: string;
+  deletedArtifactCount: number;
+  deletedTraceEventCount: number;
+  deletedBlobDigests: string[];
+}
+
+export interface CollectOrphanBlobsResult {
+  dryRun: boolean;
+  orphanDigests: string[];
+  removedDigests: string[];
+}
 
 export class SqliteLedger {
   readonly rootDirectory: string;
@@ -853,6 +867,128 @@ export class SqliteLedger {
         row.budget_snapshot_json,
       ) as TraceEventRecord["budgetSnapshot"],
     }));
+  }
+
+  purgeRun(runId: string): PurgeRunResult {
+    this.requireRun(runId);
+    const digests = (
+      this.database
+        .prepare("SELECT DISTINCT sha256 FROM artifacts WHERE run_id = ?")
+        .all(runId) as Array<{ sha256: string }>
+    ).map((row) => row.sha256);
+    const deletedTraceEventCount = (
+      this.database
+        .prepare("SELECT COUNT(*) AS count FROM trace_events WHERE run_id = ?")
+        .get(runId) as { count: number }
+    ).count;
+    const deletedArtifactCount = (
+      this.database
+        .prepare("SELECT COUNT(*) AS count FROM artifacts WHERE run_id = ?")
+        .get(runId) as { count: number }
+    ).count;
+
+    this.database.exec("BEGIN IMMEDIATE");
+    try {
+      this.database
+        .prepare("DELETE FROM trace_events WHERE run_id = ?")
+        .run(runId);
+      this.database
+        .prepare("DELETE FROM artifacts WHERE run_id = ?")
+        .run(runId);
+      const deleted = this.database
+        .prepare("DELETE FROM runs WHERE run_id = ?")
+        .run(runId);
+      if (Number(deleted.changes) !== 1) {
+        throw new Error(`Run not found: ${runId}`);
+      }
+      this.database.exec("COMMIT");
+    } catch (error) {
+      this.database.exec("ROLLBACK");
+      throw error;
+    }
+
+    const deletedBlobDigests: string[] = [];
+    for (const digest of digests) {
+      if (this.deleteBlobIfUnreferenced(digest)) {
+        deletedBlobDigests.push(digest);
+      }
+    }
+
+    return {
+      runId,
+      deletedArtifactCount,
+      deletedTraceEventCount,
+      deletedBlobDigests,
+    };
+  }
+
+  collectOrphanBlobs(
+    options: { dryRun?: boolean } = {},
+  ): CollectOrphanBlobsResult {
+    const dryRun = options.dryRun ?? false;
+    if (existsSync(this.blobDirectory)) {
+      this.assertBlobBoundary();
+    }
+    const referenced = new Set(
+      (
+        this.database
+          .prepare("SELECT DISTINCT sha256 FROM artifacts")
+          .all() as Array<{ sha256: string }>
+      ).map((row) => row.sha256),
+    );
+    const orphanDigests = this.listBlobDigests().filter(
+      (digest) => !referenced.has(digest),
+    );
+    const removedDigests: string[] = [];
+    if (!dryRun) {
+      for (const digest of orphanDigests) {
+        const path = this.blobPath(digest);
+        if (!existsSync(path)) continue;
+        const info = lstatSync(path);
+        if (!info.isFile() || info.isSymbolicLink()) {
+          throw new Error("Orphan blob path must be a regular file");
+        }
+        rmSync(path);
+        removedDigests.push(digest);
+      }
+    }
+    return { dryRun, orphanDigests, removedDigests };
+  }
+
+  private listBlobDigests(): string[] {
+    if (!existsSync(this.blobDirectory)) return [];
+    const digests: string[] = [];
+    for (const prefix of readdirSync(this.blobDirectory)) {
+      const prefixPath = join(this.blobDirectory, prefix);
+      const prefixInfo = lstatSync(prefixPath);
+      if (!prefixInfo.isDirectory() || prefixInfo.isSymbolicLink()) continue;
+      for (const suffix of readdirSync(prefixPath)) {
+        const filePath = join(prefixPath, suffix);
+        const fileInfo = lstatSync(filePath);
+        if (!fileInfo.isFile() || fileInfo.isSymbolicLink()) continue;
+        digests.push(`sha256:${prefix}${suffix}`);
+      }
+    }
+    return digests;
+  }
+
+  private isSha256Referenced(sha256: string): boolean {
+    const row = this.database
+      .prepare("SELECT 1 AS present FROM artifacts WHERE sha256 = ? LIMIT 1")
+      .get(sha256) as { present: number } | undefined;
+    return row !== undefined;
+  }
+
+  private deleteBlobIfUnreferenced(sha256: string): boolean {
+    if (this.isSha256Referenced(sha256)) return false;
+    const path = this.blobPath(sha256);
+    if (!existsSync(path)) return false;
+    const info = lstatSync(path);
+    if (!info.isFile() || info.isSymbolicLink()) {
+      throw new Error("Artifact blob path must be a regular file");
+    }
+    rmSync(path);
+    return true;
   }
 
   private blobPath(sha256: string): string {

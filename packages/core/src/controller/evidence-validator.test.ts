@@ -9,6 +9,17 @@ import {
   requiresDirectEvidence,
 } from "./evidence-validator.js";
 
+function artifact(type: string, body: unknown = {}): ArtifactSubmission {
+  return {
+    id: `artifact-${type}`,
+    runId: "run-1",
+    type,
+    schemaVersion: "1.0",
+    producer: "test",
+    body,
+  };
+}
+
 describe("requiresDirectEvidence", () => {
   it("matches WorkResult evidence reference paths", () => {
     expect(requiresDirectEvidence("body.evidenceRefs[0]", "WorkResult")).toBe(
@@ -75,15 +86,11 @@ describe("evidenceKindsForCapability", () => {
 
 describe("isUserReportedEvidencePath", () => {
   it("detects user-reported ReleaseAudit claim evidence", () => {
-    const submission: ArtifactSubmission = {
-      runId: "run-1",
-      type: "ReleaseAudit",
-      body: {
-        claimEvidenceMatrix: [
-          { basis: "user_reported", evidenceRefs: ["artifact://run-1/msg-1"] },
-        ],
-      },
-    };
+    const submission = artifact("ReleaseAudit", {
+      claimEvidenceMatrix: [
+        { basis: "user_reported", evidenceRefs: ["artifact://run-1/msg-1"] },
+      ],
+    });
     expect(
       isUserReportedEvidencePath(
         submission,
@@ -93,18 +100,14 @@ describe("isUserReportedEvidencePath", () => {
   });
 
   it("detects user-reported UserReport completion claims", () => {
-    const submission: ArtifactSubmission = {
-      runId: "run-1",
-      type: "UserReport",
-      body: {
-        completionClaims: [
-          {
-            status: "user_reported",
-            evidenceRefs: ["artifact://run-1/msg-1"],
-          },
-        ],
-      },
-    };
+    const submission = artifact("UserReport", {
+      completionClaims: [
+        {
+          status: "user_reported",
+          evidenceRefs: ["artifact://run-1/msg-1"],
+        },
+      ],
+    });
     expect(
       isUserReportedEvidencePath(
         submission,
@@ -114,11 +117,9 @@ describe("isUserReportedEvidencePath", () => {
   });
 
   it("returns false for other artifact types and paths", () => {
-    const submission: ArtifactSubmission = {
-      runId: "run-1",
-      type: "WorkResult",
-      body: { evidenceRefs: ["artifact://run-1/ev-1"] },
-    };
+    const submission = artifact("WorkResult", {
+      evidenceRefs: ["artifact://run-1/ev-1"],
+    });
     expect(isUserReportedEvidencePath(submission, "body.evidenceRefs[0]")).toBe(
       false,
     );

@@ -62,7 +62,7 @@ describe("bundled Codex plugin MCP", () => {
   });
 
   it("ships complete public presentation metadata and a local vector mark", () => {
-    expect(manifest.version).toBe("0.1.1");
+    expect(manifest.version).toBe("0.2.0");
     expect(manifest.homepage).toBe("https://github.com/Dukeabaddon/Telic");
     expect(manifest.repository).toBe(manifest.homepage);
     expect(manifest.license).toBe("MIT");

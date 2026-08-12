@@ -31928,7 +31928,7 @@ import { realpathSync as realpathSync3 } from "node:fs";
 
 // packages/core/dist/ledger.js
 import { randomUUID } from "node:crypto";
-import { chmodSync, closeSync, existsSync as existsSync2, lstatSync, mkdirSync as mkdirSync2, openSync, readFileSync as readFileSync2, realpathSync, renameSync, rmSync, writeFileSync as writeFileSync2 } from "node:fs";
+import { chmodSync, closeSync, existsSync as existsSync2, lstatSync, mkdirSync as mkdirSync2, openSync, readFileSync as readFileSync2, readdirSync, realpathSync, renameSync, rmSync, writeFileSync as writeFileSync2 } from "node:fs";
 import { constants as fsConstants } from "node:fs";
 import { dirname, isAbsolute as isAbsolute3, join as join2, relative as relative3, resolve as resolve3, sep as sep3 } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -32426,6 +32426,96 @@ var SqliteLedger = class {
       budgetSnapshot: JSON.parse(row.budget_snapshot_json)
     }));
   }
+  purgeRun(runId) {
+    this.requireRun(runId);
+    const digests = this.database.prepare("SELECT DISTINCT sha256 FROM artifacts WHERE run_id = ?").all(runId).map((row) => row.sha256);
+    const deletedTraceEventCount = this.database.prepare("SELECT COUNT(*) AS count FROM trace_events WHERE run_id = ?").get(runId).count;
+    const deletedArtifactCount = this.database.prepare("SELECT COUNT(*) AS count FROM artifacts WHERE run_id = ?").get(runId).count;
+    this.database.exec("BEGIN IMMEDIATE");
+    try {
+      this.database.prepare("DELETE FROM trace_events WHERE run_id = ?").run(runId);
+      this.database.prepare("DELETE FROM artifacts WHERE run_id = ?").run(runId);
+      const deleted = this.database.prepare("DELETE FROM runs WHERE run_id = ?").run(runId);
+      if (Number(deleted.changes) !== 1) {
+        throw new Error(`Run not found: ${runId}`);
+      }
+      this.database.exec("COMMIT");
+    } catch (error51) {
+      this.database.exec("ROLLBACK");
+      throw error51;
+    }
+    const deletedBlobDigests = [];
+    for (const digest of digests) {
+      if (this.deleteBlobIfUnreferenced(digest)) {
+        deletedBlobDigests.push(digest);
+      }
+    }
+    return {
+      runId,
+      deletedArtifactCount,
+      deletedTraceEventCount,
+      deletedBlobDigests
+    };
+  }
+  collectOrphanBlobs(options = {}) {
+    const dryRun = options.dryRun ?? false;
+    if (existsSync2(this.blobDirectory)) {
+      this.assertBlobBoundary();
+    }
+    const referenced = new Set(this.database.prepare("SELECT DISTINCT sha256 FROM artifacts").all().map((row) => row.sha256));
+    const orphanDigests = this.listBlobDigests().filter((digest) => !referenced.has(digest));
+    const removedDigests = [];
+    if (!dryRun) {
+      for (const digest of orphanDigests) {
+        const path = this.blobPath(digest);
+        if (!existsSync2(path))
+          continue;
+        const info = lstatSync(path);
+        if (!info.isFile() || info.isSymbolicLink()) {
+          throw new Error("Orphan blob path must be a regular file");
+        }
+        rmSync(path);
+        removedDigests.push(digest);
+      }
+    }
+    return { dryRun, orphanDigests, removedDigests };
+  }
+  listBlobDigests() {
+    if (!existsSync2(this.blobDirectory))
+      return [];
+    const digests = [];
+    for (const prefix of readdirSync(this.blobDirectory)) {
+      const prefixPath = join2(this.blobDirectory, prefix);
+      const prefixInfo = lstatSync(prefixPath);
+      if (!prefixInfo.isDirectory() || prefixInfo.isSymbolicLink())
+        continue;
+      for (const suffix of readdirSync(prefixPath)) {
+        const filePath = join2(prefixPath, suffix);
+        const fileInfo = lstatSync(filePath);
+        if (!fileInfo.isFile() || fileInfo.isSymbolicLink())
+          continue;
+        digests.push(`sha256:${prefix}${suffix}`);
+      }
+    }
+    return digests;
+  }
+  isSha256Referenced(sha2563) {
+    const row = this.database.prepare("SELECT 1 AS present FROM artifacts WHERE sha256 = ? LIMIT 1").get(sha2563);
+    return row !== void 0;
+  }
+  deleteBlobIfUnreferenced(sha2563) {
+    if (this.isSha256Referenced(sha2563))
+      return false;
+    const path = this.blobPath(sha2563);
+    if (!existsSync2(path))
+      return false;
+    const info = lstatSync(path);
+    if (!info.isFile() || info.isSymbolicLink()) {
+      throw new Error("Artifact blob path must be a regular file");
+    }
+    rmSync(path);
+    return true;
+  }
   blobPath(sha2563) {
     const digest = sha2563.startsWith("sha256:") ? sha2563.slice("sha256:".length) : sha2563;
     if (!/^[a-f0-9]{64}$/u.test(digest)) {
@@ -32682,6 +32772,48 @@ function projectPermissions(mode2) {
     external_write: modeAllows(mode2, "external.write"),
     subagent_spawn: modeAllows(mode2, "subagent.spawn")
   };
+}
+function emptyPermissionSet() {
+  return {
+    repository: { read: [], write: [], delete: [] },
+    shell: { inspect: false, executeAllowlist: [] },
+    runtime: { inspect: [], restart: [] },
+    browser: { inspect: false, mutateState: false },
+    network: { readDomains: [], externalWrite: false },
+    subagents: { spawn: false, maximumChildren: 0, maximumDepth: 0 }
+  };
+}
+function intersectStructuredPermissions(projection, granted, denied) {
+  const effective = emptyPermissionSet();
+  if (projection.repository_read && denied.repository.read.length === 0) {
+    effective.repository.read = [...granted.repository.read];
+  }
+  if (projection.repository_write && denied.repository.write.length === 0) {
+    effective.repository.write = [...granted.repository.write];
+  }
+  if (projection.repository_delete && denied.repository.delete.length === 0) {
+    effective.repository.delete = [...granted.repository.delete];
+  }
+  if (projection.shell_execute && denied.shell.executeAllowlist.length === 0) {
+    effective.shell.executeAllowlist = [...granted.shell.executeAllowlist];
+  }
+  effective.shell.inspect = projection.shell_inspect && granted.shell.inspect && !denied.shell.inspect;
+  if (projection.runtime_inspect && denied.runtime.inspect.length === 0) {
+    effective.runtime.inspect = [...granted.runtime.inspect];
+  }
+  if (projection.runtime_mutate && denied.runtime.restart.length === 0) {
+    effective.runtime.restart = [...granted.runtime.restart];
+  }
+  effective.browser.inspect = projection.browser_inspect && granted.browser.inspect && !denied.browser.inspect;
+  effective.browser.mutateState = projection.browser_mutate && granted.browser.mutateState && !denied.browser.mutateState;
+  if (projection.network_read && denied.network.readDomains.length === 0) {
+    effective.network.readDomains = [...granted.network.readDomains];
+  }
+  effective.network.externalWrite = projection.external_write && granted.network.externalWrite && !denied.network.externalWrite;
+  if (projection.subagent_spawn && granted.subagents.spawn && !denied.subagents.spawn) {
+    effective.subagents = { ...granted.subagents };
+  }
+  return effective;
 }
 
 // packages/core/dist/classify-run.js
@@ -33522,6 +33654,54 @@ function resumeAfterClarification(run) {
   };
 }
 
+// packages/core/dist/controller/evidence-validator.js
+function requiresDirectEvidence(path, submissionType) {
+  return submissionType === "WorkResult" && (/^body\.evidenceRefs\[\d+\]$/u.test(path) || /^body\.actions\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path)) || /\.claimEvidenceMatrix\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) || /\.completionClaims\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) || /\.observations\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) || /\.inferences\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) || /\.toolEventRefs\[\d+\]$/u.test(path) || /\.verificationRefs\[\d+\]$/u.test(path) || /\.diagnosisGate\.directEvidenceRefs\[\d+\]$/u.test(path) || /\.acceptanceCoverage\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) || /\.acceptanceResults\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) || /\.filesChanged\[\d+\]\.diffRef$/u.test(path) || /\.testResults\[\d+\]\.(?:commandRef|outputRef)$/u.test(path) || /\.verificationResults\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) || /\.(?:ruleCompliance|regressionChecks|userFidelity)\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) || submissionType === "QualityReview" && /\.hardGates\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path);
+}
+var directEvidenceArtifactTypes = /* @__PURE__ */ new Set([
+  "Evidence",
+  "ContextDocument",
+  "TraceEvent"
+]);
+var directEvidenceTraceEventTypes = /* @__PURE__ */ new Set();
+function evidenceKindsForCapability(capability2) {
+  switch (capability2) {
+    case "repository.read":
+      return /* @__PURE__ */ new Set(["repository", "diff", "tool_output"]);
+    case "repository.write":
+    case "repository.delete":
+      return /* @__PURE__ */ new Set(["diff"]);
+    case "shell.inspect":
+    case "shell.execute":
+      return /* @__PURE__ */ new Set(["tool_output", "log", "test"]);
+    case "runtime.inspect":
+    case "runtime.restart":
+      return /* @__PURE__ */ new Set(["runtime", "log", "tool_output"]);
+    case "browser.inspect":
+    case "browser.mutate":
+      return /* @__PURE__ */ new Set(["browser"]);
+    case "network.read":
+    case "external.write":
+    case "subagent.spawn":
+      return /* @__PURE__ */ new Set(["tool_output"]);
+    default:
+      return /* @__PURE__ */ new Set();
+  }
+}
+function isUserReportedEvidencePath(submission, path) {
+  if (submission.type === "ReleaseAudit") {
+    const match = /^body\.claimEvidenceMatrix\[(\d+)\]\.evidenceRefs\[\d+\]$/u.exec(path);
+    const matrix = typeof submission.body === "object" && submission.body !== null && "claimEvidenceMatrix" in submission.body ? submission.body.claimEvidenceMatrix : null;
+    return match !== null && Array.isArray(matrix) && typeof matrix[Number(match[1])] === "object" && matrix[Number(match[1])] !== null && matrix[Number(match[1])].basis === "user_reported";
+  }
+  if (submission.type === "UserReport") {
+    const match = /^body\.completionClaims\[(\d+)\]\.evidenceRefs\[\d+\]$/u.exec(path);
+    const claims = typeof submission.body === "object" && submission.body !== null && "completionClaims" in submission.body ? submission.body.completionClaims : null;
+    return match !== null && Array.isArray(claims) && typeof claims[Number(match[1])] === "object" && claims[Number(match[1])] !== null && claims[Number(match[1])].status === "user_reported";
+  }
+  return false;
+}
+
 // packages/core/dist/controller.js
 var artifactInputsByPhase = {
   context_grounding: /* @__PURE__ */ new Set([
@@ -33632,16 +33812,6 @@ var MAX_NEXT_ACTION_INPUT_REFS = 256;
 var MAX_CLARIFICATIONS_PER_RUN = 1;
 var MAX_TOOL_CALLS_PER_RUN = 4e3;
 var REFERENCE_URI_PATTERN = /^(?:artifact|trace|repo):\/\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]+$/u;
-function emptyPermissionSet() {
-  return {
-    repository: { read: [], write: [], delete: [] },
-    shell: { inspect: false, executeAllowlist: [] },
-    runtime: { inspect: [], restart: [] },
-    browser: { inspect: false, mutateState: false },
-    network: { readDomains: [], externalWrite: false },
-    subagents: { spawn: false, maximumChildren: 0, maximumDepth: 0 }
-  };
-}
 function capabilitiesToPermissionSet(capabilities, shellExecuteAllowlist = [], denyAll = false, networkReadDomains = []) {
   const permissions = emptyPermissionSet();
   for (const capability2 of capabilities) {
@@ -33689,38 +33859,6 @@ function capabilitiesToPermissionSet(capabilities, shellExecuteAllowlist = [], d
     }
   }
   return permissions;
-}
-function intersectStructuredPermissions(projection, granted, denied) {
-  const effective = emptyPermissionSet();
-  if (projection.repository_read && denied.repository.read.length === 0) {
-    effective.repository.read = [...granted.repository.read];
-  }
-  if (projection.repository_write && denied.repository.write.length === 0) {
-    effective.repository.write = [...granted.repository.write];
-  }
-  if (projection.repository_delete && denied.repository.delete.length === 0) {
-    effective.repository.delete = [...granted.repository.delete];
-  }
-  if (projection.shell_execute && denied.shell.executeAllowlist.length === 0) {
-    effective.shell.executeAllowlist = [...granted.shell.executeAllowlist];
-  }
-  effective.shell.inspect = projection.shell_inspect && granted.shell.inspect && !denied.shell.inspect;
-  if (projection.runtime_inspect && denied.runtime.inspect.length === 0) {
-    effective.runtime.inspect = [...granted.runtime.inspect];
-  }
-  if (projection.runtime_mutate && denied.runtime.restart.length === 0) {
-    effective.runtime.restart = [...granted.runtime.restart];
-  }
-  effective.browser.inspect = projection.browser_inspect && granted.browser.inspect && !denied.browser.inspect;
-  effective.browser.mutateState = projection.browser_mutate && granted.browser.mutateState && !denied.browser.mutateState;
-  if (projection.network_read && denied.network.readDomains.length === 0) {
-    effective.network.readDomains = [...granted.network.readDomains];
-  }
-  effective.network.externalWrite = projection.external_write && granted.network.externalWrite && !denied.network.externalWrite;
-  if (projection.subagent_spawn && granted.subagents.spawn && !denied.subagents.spawn) {
-    effective.subagents = { ...granted.subagents };
-  }
-  return effective;
 }
 function explicitPermissionProjection(mode2, envelope) {
   const ceiling = projectPermissions(mode2);
@@ -33969,39 +34107,6 @@ var potentiallyMutatingPlanCapabilities = /* @__PURE__ */ new Set([
   "shell.execute",
   "subagent.spawn"
 ]);
-function requiresDirectEvidence(path, submissionType) {
-  return submissionType === "WorkResult" && (/^body\.evidenceRefs\[\d+\]$/u.test(path) || /^body\.actions\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path)) || /\.claimEvidenceMatrix\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) || /\.completionClaims\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) || /\.observations\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) || /\.inferences\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) || /\.toolEventRefs\[\d+\]$/u.test(path) || /\.verificationRefs\[\d+\]$/u.test(path) || /\.diagnosisGate\.directEvidenceRefs\[\d+\]$/u.test(path) || /\.acceptanceCoverage\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) || /\.acceptanceResults\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) || /\.filesChanged\[\d+\]\.diffRef$/u.test(path) || /\.testResults\[\d+\]\.(?:commandRef|outputRef)$/u.test(path) || /\.verificationResults\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) || /\.(?:ruleCompliance|regressionChecks|userFidelity)\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path) || submissionType === "QualityReview" && /\.hardGates\[\d+\]\.evidenceRefs\[\d+\]$/u.test(path);
-}
-var directEvidenceArtifactTypes = /* @__PURE__ */ new Set([
-  "Evidence",
-  "ContextDocument",
-  "TraceEvent"
-]);
-var directEvidenceTraceEventTypes = /* @__PURE__ */ new Set();
-function evidenceKindsForCapability(capability2) {
-  switch (capability2) {
-    case "repository.read":
-      return /* @__PURE__ */ new Set(["repository", "diff", "tool_output"]);
-    case "repository.write":
-    case "repository.delete":
-      return /* @__PURE__ */ new Set(["diff"]);
-    case "shell.inspect":
-    case "shell.execute":
-      return /* @__PURE__ */ new Set(["tool_output", "log", "test"]);
-    case "runtime.inspect":
-    case "runtime.restart":
-      return /* @__PURE__ */ new Set(["runtime", "log", "tool_output"]);
-    case "browser.inspect":
-    case "browser.mutate":
-      return /* @__PURE__ */ new Set(["browser"]);
-    case "network.read":
-    case "external.write":
-    case "subagent.spawn":
-      return /* @__PURE__ */ new Set(["tool_output"]);
-    default:
-      return /* @__PURE__ */ new Set();
-  }
-}
 var PermissionAuthorizationError = class extends Error {
   permissionDecision;
   inputRefs;
@@ -34049,19 +34154,6 @@ function isKnownSystemReference(reference) {
 }
 function terminalField(path) {
   return /\.([A-Za-z][A-Za-z0-9]*)(?:\[\d+\])?$/u.exec(path)?.[1] ?? "";
-}
-function isUserReportedEvidencePath(submission, path) {
-  if (submission.type === "ReleaseAudit") {
-    const match = /^body\.claimEvidenceMatrix\[(\d+)\]\.evidenceRefs\[\d+\]$/u.exec(path);
-    const matrix = typeof submission.body === "object" && submission.body !== null && "claimEvidenceMatrix" in submission.body ? submission.body.claimEvidenceMatrix : null;
-    return match !== null && Array.isArray(matrix) && typeof matrix[Number(match[1])] === "object" && matrix[Number(match[1])] !== null && matrix[Number(match[1])].basis === "user_reported";
-  }
-  if (submission.type === "UserReport") {
-    const match = /^body\.completionClaims\[(\d+)\]\.evidenceRefs\[\d+\]$/u.exec(path);
-    const claims = typeof submission.body === "object" && submission.body !== null && "completionClaims" in submission.body ? submission.body.completionClaims : null;
-    return match !== null && Array.isArray(claims) && typeof claims[Number(match[1])] === "object" && claims[Number(match[1])] !== null && claims[Number(match[1])].status === "user_reported";
-  }
-  return false;
 }
 function equalStringSets(left, right) {
   return left.length === right.length && new Set(left).size === left.length && left.every((item) => right.includes(item));
@@ -35784,58 +35876,16 @@ var RunController = class {
 };
 
 // packages/core/dist/tool-broker.js
-function emptyPermissionSet2() {
-  return {
-    repository: { read: [], write: [], delete: [] },
-    shell: { inspect: false, executeAllowlist: [] },
-    runtime: { inspect: [], restart: [] },
-    browser: { inspect: false, mutateState: false },
-    network: { readDomains: [], externalWrite: false },
-    subagents: { spawn: false, maximumChildren: 0, maximumDepth: 0 }
-  };
-}
-function intersectStructuredPermissions2(projection, granted, denied) {
-  const effective = emptyPermissionSet2();
-  if (projection.repository_read && denied.repository.read.length === 0) {
-    effective.repository.read = [...granted.repository.read];
-  }
-  if (projection.repository_write && denied.repository.write.length === 0) {
-    effective.repository.write = [...granted.repository.write];
-  }
-  if (projection.repository_delete && denied.repository.delete.length === 0) {
-    effective.repository.delete = [...granted.repository.delete];
-  }
-  if (projection.shell_execute && denied.shell.executeAllowlist.length === 0) {
-    effective.shell.executeAllowlist = [...granted.shell.executeAllowlist];
-  }
-  effective.shell.inspect = projection.shell_inspect && granted.shell.inspect && !denied.shell.inspect;
-  if (projection.runtime_inspect && denied.runtime.inspect.length === 0) {
-    effective.runtime.inspect = [...granted.runtime.inspect];
-  }
-  if (projection.runtime_mutate && denied.runtime.restart.length === 0) {
-    effective.runtime.restart = [...granted.runtime.restart];
-  }
-  effective.browser.inspect = projection.browser_inspect && granted.browser.inspect && !denied.browser.inspect;
-  effective.browser.mutateState = projection.browser_mutate && granted.browser.mutateState && !denied.browser.mutateState;
-  if (projection.network_read && denied.network.readDomains.length === 0) {
-    effective.network.readDomains = [...granted.network.readDomains];
-  }
-  effective.network.externalWrite = projection.external_write && granted.network.externalWrite && !denied.network.externalWrite;
-  if (projection.subagent_spawn && granted.subagents.spawn && !denied.subagents.spawn) {
-    effective.subagents = { ...granted.subagents };
-  }
-  return effective;
-}
 function permissionsFromEnvelope(mode2, envelope) {
   const ceiling = projectPermissions(mode2);
   if (typeof envelope !== "object" || envelope === null || !("authorization" in envelope)) {
-    return emptyPermissionSet2();
+    return emptyPermissionSet();
   }
   const authorization = envelope.authorization;
   if (typeof authorization !== "object" || authorization === null || !("granted" in authorization) || !("denied" in authorization)) {
-    return emptyPermissionSet2();
+    return emptyPermissionSet();
   }
-  return intersectStructuredPermissions2(ceiling, authorization.granted, authorization.denied);
+  return intersectStructuredPermissions(ceiling, authorization.granted, authorization.denied);
 }
 function actionKindForCapability2(capability2) {
   if (capability2 === "runtime.restart")
@@ -39113,7 +39163,7 @@ function registerTools(server, service) {
   );
 }
 function createTelicMcpServer(service) {
-  const server = new McpServer({ name: "telic", version: "0.1.1" });
+  const server = new McpServer({ name: "telic", version: "0.2.0" });
   registerPrompts(server);
   registerTools(server, service);
   return server;

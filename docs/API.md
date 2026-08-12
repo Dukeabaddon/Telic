@@ -1,6 +1,6 @@
 # Telic source-preview API
 
-**Version:** `0.1.1` implementation, artifact schema `1.0`
+**Version:** `0.2.0` implementation, artifact schema `1.0`
 
 This is the human-oriented reference for the current source tree. The Zod schemas in `packages/protocol/src/` and the registrations in `packages/mcp/src/server-factory.ts` are authoritative. Telic has no compatibility guarantee before its first release.
 

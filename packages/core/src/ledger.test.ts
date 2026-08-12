@@ -10,88 +10,19 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { Worker } from "node:worker_threads";
 
 import { afterEach, describe, expect, it } from "vitest";
 
+import { runBlockedWorkers } from "../../../test/helpers/blocked-sqlite-workers.js";
 import { SqliteLedger } from "./ledger.js";
 import type { ArtifactSubmission, RunRecord } from "./types.js";
 
 const ledgers: SqliteLedger[] = [];
 
-type WorkerResult =
-  | { kind: "result"; ok: true; artifact: unknown }
-  | { kind: "result"; ok: false; error: string };
-
-function workerMessage<T>(worker: Worker, kind: string): Promise<T> {
-  return new Promise<T>((resolvePromise, rejectPromise) => {
-    const onMessage = (message: { kind?: unknown }): void => {
-      if (message.kind !== kind) return;
-      cleanup();
-      resolvePromise(message as T);
-    };
-    const onError = (error: Error): void => {
-      cleanup();
-      rejectPromise(error);
-    };
-    const onExit = (code: number): void => {
-      cleanup();
-      rejectPromise(
-        new Error(
-          `Supporting worker exited with code ${String(code)} before ${kind}`,
-        ),
-      );
-    };
-    const cleanup = (): void => {
-      worker.off("message", onMessage);
-      worker.off("error", onError);
-      worker.off("exit", onExit);
-    };
-    worker.on("message", onMessage);
-    worker.on("error", onError);
-    worker.on("exit", onExit);
-  });
-}
-
-async function runBlockedWorkers(
-  databasePath: string,
-  workerData: readonly Record<string, unknown>[],
-): Promise<WorkerResult[]> {
-  const workerUrl = new URL(
-    "../../../test/helpers/supporting-artifact-worker.ts",
-    import.meta.url,
-  );
-  const workers = workerData.map(
-    (data) =>
-      new Worker(workerUrl, {
-        workerData: data,
-        execArgv: ["--import", "tsx"],
-      }),
-  );
-  await Promise.all(
-    workers.map(async (worker) => workerMessage(worker, "ready")),
-  );
-  const blocker = new DatabaseSync(databasePath);
-  blocker.exec("PRAGMA busy_timeout = 5000; BEGIN IMMEDIATE;");
-  let locked = true;
-  try {
-    const starting = workers.map(async (worker) =>
-      workerMessage(worker, "starting"),
-    );
-    const results = workers.map(async (worker) =>
-      workerMessage<WorkerResult>(worker, "result"),
-    );
-    for (const worker of workers) worker.postMessage("go");
-    await Promise.all(starting);
-    await new Promise((resolvePromise) => setTimeout(resolvePromise, 100));
-    blocker.exec("COMMIT");
-    locked = false;
-    return await Promise.all(results);
-  } finally {
-    if (locked) blocker.exec("ROLLBACK");
-    blocker.close();
-  }
-}
+const supportingWorkerUrl = new URL(
+  "../../../test/helpers/supporting-artifact-worker.ts",
+  import.meta.url,
+);
 
 function createRun(): RunRecord {
   return {
@@ -345,6 +276,7 @@ describe("SQLite ledger and content-addressed artifacts", () => {
       decisionSummary: "Stored bounded evidence.",
     };
     const results = await runBlockedWorkers(
+      supportingWorkerUrl,
       ledger.databasePath,
       Array.from({ length: 2 }, () => ({
         kind: "ledger",
@@ -377,7 +309,7 @@ describe("SQLite ledger and content-addressed artifacts", () => {
       eventType: "evidence_captured",
       decisionSummary: "Stored bounded evidence.",
     };
-    const results = await runBlockedWorkers(ledger.databasePath, [
+    const results = await runBlockedWorkers(supportingWorkerUrl, ledger.databasePath, [
       {
         kind: "ledger",
         stateDirectory: ledger.rootDirectory,

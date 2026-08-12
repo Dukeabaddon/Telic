@@ -1,8 +1,6 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
-import { Worker } from "node:worker_threads";
 
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -10,43 +8,17 @@ import {
   NO_PERMISSIONS,
   VALID_ARTIFACT_BODIES,
 } from "../../protocol/test/test-helpers.js";
+import {
+  runBlockedWorkers,
+  type BlockedWorkerResult,
+} from "../../../test/helpers/blocked-sqlite-workers.js";
 import { TelicService } from "./service.js";
 
 const services: TelicService[] = [];
-
-type SupportingWorkerResult =
-  | { kind: "result"; ok: true; artifact: unknown }
-  | { kind: "result"; ok: false; error: string };
-
-function supportingWorkerMessage<T>(worker: Worker, kind: string): Promise<T> {
-  return new Promise<T>((resolvePromise, rejectPromise) => {
-    const onMessage = (message: { kind?: unknown }): void => {
-      if (message.kind !== kind) return;
-      cleanup();
-      resolvePromise(message as T);
-    };
-    const onError = (error: Error): void => {
-      cleanup();
-      rejectPromise(error);
-    };
-    const onExit = (code: number): void => {
-      cleanup();
-      rejectPromise(
-        new Error(
-          `Supporting worker exited with code ${String(code)} before ${kind}`,
-        ),
-      );
-    };
-    const cleanup = (): void => {
-      worker.off("message", onMessage);
-      worker.off("error", onError);
-      worker.off("exit", onExit);
-    };
-    worker.on("message", onMessage);
-    worker.on("error", onError);
-    worker.on("exit", onExit);
-  });
-}
+const supportingWorkerUrl = new URL(
+  "../../../test/helpers/supporting-artifact-worker.ts",
+  import.meta.url,
+);
 
 async function runBlockedServiceWorkers(
   harness: Awaited<ReturnType<typeof groundedHarness>>,
@@ -55,53 +27,24 @@ async function runBlockedServiceWorkers(
     producer: string;
     body: Record<string, unknown>;
   }[],
-): Promise<SupportingWorkerResult[]> {
-  const workerUrl = new URL(
-    "../../../test/helpers/supporting-artifact-worker.ts",
-    import.meta.url,
+): Promise<BlockedWorkerResult[]> {
+  return runBlockedWorkers(
+    supportingWorkerUrl,
+    harness.service.ledger.databasePath,
+    submissions.map((submission) => ({
+      kind: "service" as const,
+      repositoryRoot: harness.service.repositoryRoot,
+      stateDirectory: harness.service.stateDirectory,
+      artifact: {
+        id: submission.body.id,
+        runId: harness.started.run.runId,
+        type: submission.type,
+        schemaVersion: "1.0",
+        producer: submission.producer,
+        body: submission.body,
+      },
+    })),
   );
-  const workers = submissions.map(
-    (submission) =>
-      new Worker(workerUrl, {
-        workerData: {
-          kind: "service",
-          repositoryRoot: harness.service.repositoryRoot,
-          stateDirectory: harness.service.stateDirectory,
-          artifact: {
-            id: submission.body.id,
-            runId: harness.started.run.runId,
-            type: submission.type,
-            schemaVersion: "1.0",
-            producer: submission.producer,
-            body: submission.body,
-          },
-        },
-        execArgv: ["--import", "tsx"],
-      }),
-  );
-  await Promise.all(
-    workers.map(async (worker) => supportingWorkerMessage(worker, "ready")),
-  );
-  const blocker = new DatabaseSync(harness.service.ledger.databasePath);
-  blocker.exec("PRAGMA busy_timeout = 5000; BEGIN IMMEDIATE;");
-  let locked = true;
-  try {
-    const starting = workers.map(async (worker) =>
-      supportingWorkerMessage(worker, "starting"),
-    );
-    const results = workers.map(async (worker) =>
-      supportingWorkerMessage<SupportingWorkerResult>(worker, "result"),
-    );
-    for (const worker of workers) worker.postMessage("go");
-    await Promise.all(starting);
-    await new Promise((resolvePromise) => setTimeout(resolvePromise, 100));
-    blocker.exec("COMMIT");
-    locked = false;
-    return await Promise.all(results);
-  } finally {
-    if (locked) blocker.exec("ROLLBACK");
-    blocker.close();
-  }
 }
 
 afterEach(() => {

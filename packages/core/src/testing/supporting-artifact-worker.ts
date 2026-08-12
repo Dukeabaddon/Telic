@@ -4,9 +4,9 @@ import {
   SqliteLedger,
   type SubmissionEvent,
   type SupportingArtifactQuota,
-} from "../../packages/core/src/ledger.ts";
-import type { ArtifactSubmission } from "../../packages/core/src/types.ts";
-import { TelicService } from "../../packages/mcp/src/service.ts";
+} from "../ledger.js";
+import type { ArtifactSubmission } from "../types.js";
+import { TelicService } from "../../../mcp/src/service.js";
 
 type LedgerWorkerData = {
   kind: "ledger";

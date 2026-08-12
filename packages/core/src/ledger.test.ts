@@ -13,14 +13,14 @@ import { DatabaseSync } from "node:sqlite";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { runBlockedWorkers } from "../../../test/helpers/blocked-sqlite-workers.js";
+import { runBlockedWorkers } from "./testing/blocked-sqlite-workers.js";
 import { SqliteLedger } from "./ledger.js";
 import type { ArtifactSubmission, RunRecord } from "./types.js";
 
 const ledgers: SqliteLedger[] = [];
 
 const supportingWorkerUrl = new URL(
-  "../../../test/helpers/supporting-artifact-worker.ts",
+  "./testing/supporting-artifact-worker.ts",
   import.meta.url,
 );
 

@@ -1,0 +1,636 @@
+import { createHash } from "node:crypto";
+import { existsSync, realpathSync } from "node:fs";
+import { homedir } from "node:os";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep, } from "node:path";
+import { containsLikelySecret, groundRepository, isInstructionPath, } from "@telic/context";
+import { clearActiveSession, writeActiveSession, RunController, SqliteLedger, evaluateBrokerAction, inspectRunReplay, permissionsFromEnvelope, } from "@telic/core";
+import { isArtifactType, getArtifactJsonSchema, normalizeContextManifestWire, parseArtifactBody, parseContextManifest, } from "@telic/protocol";
+export function defaultStateDirectory(repositoryRoot) {
+    const canonicalRoot = realpathSync(resolve(repositoryRoot));
+    const repositoryKey = createHash("sha256")
+        .update(canonicalRoot)
+        .digest("hex")
+        .slice(0, 24);
+    const stateHome = process.env.XDG_STATE_HOME
+        ? resolve(process.env.XDG_STATE_HOME)
+        : join(homedir(), ".local", "state");
+    return join(stateHome, "telic", "repositories", repositoryKey);
+}
+function protocolValidator(type, body) {
+    if (!isArtifactType(type))
+        throw new Error(`Unsupported artifact type: ${type}`);
+    return parseArtifactBody(type, body);
+}
+function defaultCapabilities(mode) {
+    switch (mode) {
+        case "report_only":
+            return [];
+        case "plan_only":
+            return ["repository.read"];
+        case "analyze_only":
+            return [
+                "repository.read",
+                "shell.inspect",
+                "runtime.inspect",
+                "browser.inspect",
+            ];
+        case "fix_only":
+        case "analyze_and_fix":
+            return [
+                "repository.read",
+                "repository.write",
+                "shell.inspect",
+                "runtime.inspect",
+            ];
+    }
+}
+function intersectCapabilities(granted, available) {
+    const availableSet = new Set(available);
+    return [...new Set(granted)]
+        .filter((capability) => availableSet.has(capability))
+        .sort();
+}
+const MAX_TRACE_INPUT_REFS = 256;
+const MAX_DECODED_EVIDENCE_BYTES = 2 * 1024 * 1024;
+const MAX_EVIDENCE_PER_WORK_PLAN = 128;
+const MAX_SCENARIO_SPECS_PER_FRAME = 1;
+const REFERENCE_URI_PATTERN = /^(?:artifact|repo|trace):\/\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]+$/u;
+const CANONICAL_BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u;
+function isPathContained(root, target) {
+    const fromRoot = relative(root, target);
+    return (fromRoot === "" ||
+        (fromRoot !== ".." &&
+            !fromRoot.startsWith(`..${sep}`) &&
+            !isAbsolute(fromRoot)));
+}
+function canonicalProspectivePath(path) {
+    let existingAncestor = resolve(path);
+    const missingSegments = [];
+    while (!existsSync(existingAncestor)) {
+        const parent = dirname(existingAncestor);
+        if (parent === existingAncestor)
+            return resolve(path);
+        missingSegments.unshift(basename(existingAncestor));
+        existingAncestor = parent;
+    }
+    return resolve(realpathSync(existingAncestor), ...missingSegments);
+}
+function assertStateOutsideRepository(repositoryRoot, stateDirectory) {
+    const lexicalState = resolve(stateDirectory);
+    const canonicalState = canonicalProspectivePath(lexicalState);
+    if (isPathContained(repositoryRoot, lexicalState) ||
+        isPathContained(lexicalState, repositoryRoot) ||
+        isPathContained(repositoryRoot, canonicalState) ||
+        isPathContained(canonicalState, repositoryRoot)) {
+        throw new Error("Telic state directory must be outside the repository being grounded and must not contain it");
+    }
+}
+function containsLikelySecretInValue(value, seen = new WeakSet()) {
+    if (typeof value === "string")
+        return containsLikelySecret(value);
+    if (typeof value !== "object" || value === null)
+        return false;
+    if (seen.has(value))
+        return false;
+    seen.add(value);
+    const values = Array.isArray(value) ? value : Object.values(value);
+    const containsSecret = values.some((child) => containsLikelySecretInValue(child, seen));
+    seen.delete(value);
+    return containsSecret;
+}
+function evidenceContentForSecretScan(encoding, content) {
+    if (encoding === "utf8")
+        return content;
+    if (!CANONICAL_BASE64_PATTERN.test(content)) {
+        throw new Error("Evidence content is not canonical base64");
+    }
+    const decoded = Buffer.from(content, "base64");
+    if (decoded.byteLength > MAX_DECODED_EVIDENCE_BYTES) {
+        throw new Error(`Decoded evidence exceeds ${String(MAX_DECODED_EVIDENCE_BYTES)} bytes`);
+    }
+    if (decoded.toString("base64") !== content) {
+        throw new Error("Evidence content is not canonical base64");
+    }
+    return decoded.toString("utf8");
+}
+function collectBodyReferenceUris(value, references, key = "", depth = 0, seen = new WeakSet()) {
+    if (depth > 64)
+        return;
+    if (typeof value === "string") {
+        if ((key === "ref" ||
+            key === "evidenceInspected" ||
+            key.endsWith("Ref") ||
+            key.endsWith("Refs")) &&
+            REFERENCE_URI_PATTERN.test(value)) {
+            references.add(value);
+        }
+        return;
+    }
+    if (typeof value !== "object" || value === null)
+        return;
+    if (seen.has(value))
+        return;
+    seen.add(value);
+    if (Array.isArray(value)) {
+        for (const item of value) {
+            collectBodyReferenceUris(item, references, key, depth + 1, seen);
+        }
+    }
+    else {
+        for (const [childKey, child] of Object.entries(value)) {
+            collectBodyReferenceUris(child, references, childKey, depth + 1, seen);
+        }
+    }
+    seen.delete(value);
+}
+function traceInputRefs(ledger, runId, body, supplied = []) {
+    if (new Set(supplied).size !== supplied.length) {
+        throw new Error("Artifact sourceRefs must be unique");
+    }
+    const result = new Set(supplied);
+    if (result.size > MAX_TRACE_INPUT_REFS) {
+        throw new Error(`Artifact sourceRefs exceed the ${String(MAX_TRACE_INPUT_REFS)} item limit`);
+    }
+    const bodyReferences = new Set();
+    collectBodyReferenceUris(body, bodyReferences);
+    const existingArtifacts = new Set(ledger
+        .listArtifacts(runId)
+        .map((artifact) => `artifact://${runId}/${artifact.id}`));
+    for (const reference of bodyReferences) {
+        if (reference.startsWith("artifact://system/"))
+            continue;
+        if (reference.startsWith("artifact://") &&
+            !existingArtifacts.has(reference)) {
+            continue;
+        }
+        result.add(reference);
+        if (result.size > MAX_TRACE_INPUT_REFS) {
+            throw new Error(`Artifact sourceRefs exceed the ${String(MAX_TRACE_INPUT_REFS)} item limit`);
+        }
+    }
+    return [...result];
+}
+function internalDocumentId(contextId, hash, index) {
+    return `${contextId}-source-${String(index + 1).padStart(3, "0")}-${hash.slice("sha256:".length, 20)}`;
+}
+function emptyReportOnlyManifest(run) {
+    const digest = createHash("sha256").update("").digest("hex");
+    return parseContextManifest({
+        schemaVersion: "1.0",
+        id: `context-report-only-${run.runId.slice(0, 12)}`,
+        runId: run.runId,
+        repositoryFingerprint: {
+            headCommit: null,
+            dirtyWorktreeHash: `sha256:${digest}`,
+        },
+        pinnedRefs: [],
+        candidates: [],
+        derivedRefs: [],
+        excludedCandidateSummaries: [],
+        inventorySource: "filesystem",
+        warnings: [
+            "report_only mode intentionally skipped new repository discovery.",
+        ],
+        budget: {
+            maximumFiles: 1,
+            maximumFileBytes: 1,
+            maximumTotalBytes: 1,
+            maximumInventoryFiles: 1,
+            candidateFiles: 0,
+            selectedFiles: 0,
+            selectedBytes: 0,
+            estimatedTokens: 0,
+        },
+    });
+}
+const tracePhase = {
+    context_grounding: "context_discovery",
+    agent_1_frame: "agent_1_frame",
+    agent_2_compile: "agent_2_compile",
+    agent_1_review: "agent_1_review",
+    agent_2_revise: "agent_2_revision",
+    agent_3_plan: "agent_3_plan",
+    agent_4_execute: "agent_4_execute",
+    agent_3_review: "agent_3_quality_review",
+    agent_3_evidence_reverify: "agent_3_evidence_reverify",
+    agent_5_audit: "agent_5_release_audit",
+    agent_5_report: "user_report",
+};
+const canonicalTraceEventType = {
+    run_started: "run_started",
+    context_source_stored: "artifact_recorded",
+    evidence_captured: "artifact_recorded",
+    scenario_presentation_stored: "artifact_recorded",
+    phase_submitted: "phase_submitted",
+    clarification_requested: "clarification_requested",
+    permission_checked: "permission_checked",
+    broker_decision: "broker_decision",
+    clarification_answered: "transition_allowed",
+    run_cancelled: "run_terminated",
+    topology_classified: "topology_classified",
+    digest_verified: "digest_verified",
+    lineage_linked: "lineage_linked",
+    topology_escalated: "topology_escalated",
+};
+const traceActors = new Set([
+    "controller",
+    "scenario_author",
+    "task_compiler",
+    "quality_controller",
+    "executor",
+    "release_auditor",
+    "host",
+    "tool",
+    "user",
+]);
+export class TelicService {
+    repositoryRoot;
+    stateDirectory;
+    ledger;
+    controller;
+    constructor(options) {
+        this.repositoryRoot = realpathSync(resolve(options.repositoryRoot));
+        const stateDirectory = resolve(options.stateDirectory ?? defaultStateDirectory(this.repositoryRoot));
+        assertStateOutsideRepository(this.repositoryRoot, stateDirectory);
+        this.stateDirectory = stateDirectory;
+        this.ledger = new SqliteLedger(this.stateDirectory);
+        this.controller = new RunController(this.ledger, protocolValidator, (type) => {
+            if (!isArtifactType(type)) {
+                throw new Error(`Unsupported artifact type: ${type}`);
+            }
+            return getArtifactJsonSchema(type);
+        });
+    }
+    close() {
+        this.ledger.close();
+    }
+    assertActionToken(runId, actionId, expectedRunVersion) {
+        const run = this.ledger.requireRun(runId);
+        if (run.version !== expectedRunVersion) {
+            throw new Error(`Stale run version ${String(expectedRunVersion)}; current version is ${String(run.version)}`);
+        }
+        const action = this.controller.getNextAction(runId);
+        if (action.id !== actionId) {
+            throw new Error("Stale or foreign action_id; reload the next action");
+        }
+    }
+    startRun(input) {
+        const hostCapabilities = [
+            ...new Set(input.hostCapabilities ?? ["repository.read"]),
+        ].sort();
+        const desired = input.authorizationGranted ?? defaultCapabilities(input.mode);
+        const granted = intersectCapabilities(desired, hostCapabilities);
+        const denied = [...new Set(input.authorizationDenied ?? [])].sort();
+        const started = this.controller.startRun({
+            repositoryRoot: this.repositoryRoot,
+            originalRequest: input.originalRequest,
+            requestedMode: input.mode,
+            ...(input.topologyOverride !== undefined
+                ? { topologyOverride: input.topologyOverride }
+                : {}),
+            ...(input.priorRunId !== undefined
+                ? { priorRunId: input.priorRunId }
+                : {}),
+            host: {
+                name: input.hostName ?? "mcp-host",
+                nativeSubagents: input.nativeSubagents ?? "unknown",
+                capabilities: hostCapabilities,
+            },
+            authorization: {
+                granted,
+                denied,
+                ...(input.shellExecuteAllowlist
+                    ? { shellExecuteAllowlist: input.shellExecuteAllowlist }
+                    : {}),
+                ...(input.networkReadDomains
+                    ? { networkReadDomains: input.networkReadDomains }
+                    : {}),
+            },
+        });
+        this.publishActiveSession(started.run, started.nextAction);
+        return started;
+    }
+    publishActiveSession(run, nextAction) {
+        if (run.status !== "running") {
+            clearActiveSession(this.stateDirectory);
+            return;
+        }
+        writeActiveSession(this.stateDirectory, {
+            schemaVersion: "1.0",
+            runId: run.runId,
+            actionId: nextAction.id,
+            runVersion: run.version,
+            repositoryRoot: run.repositoryRoot,
+            requestedMode: run.requestedMode,
+            updatedAt: new Date().toISOString(),
+        });
+    }
+    async groundContext(input) {
+        const run = this.ledger.requireRun(input.runId);
+        if (run.phase !== "context_grounding" || run.status !== "running") {
+            throw new Error(`Run ${run.runId} is not awaiting context grounding`);
+        }
+        let manifest;
+        let sourceRefs = [];
+        if (run.requestedMode === "report_only") {
+            manifest = emptyReportOnlyManifest(run);
+        }
+        else {
+            const requestRecord = this.ledger
+                .listArtifacts(run.runId)
+                .find((artifact) => artifact.type === "UserMessage");
+            if (!requestRecord)
+                throw new Error("Run is missing its immutable original request");
+            const requestArtifact = this.ledger.getArtifact(run.runId, requestRecord.id);
+            const requestBody = requestArtifact?.body;
+            if (typeof requestBody !== "object" ||
+                requestBody === null ||
+                !("content" in requestBody) ||
+                typeof requestBody.content !== "string") {
+                throw new Error("Original request artifact is invalid");
+            }
+            const grounded = await groundRepository({
+                run_id: run.runId,
+                repository_root: run.repositoryRoot,
+                request: requestBody.content,
+                excluded_roots: [this.stateDirectory],
+                ...(input.activePaths ? { active_paths: input.activePaths } : {}),
+                ...(input.budget ? { budget: input.budget } : {}),
+            });
+            for (const [index, document] of grounded.documents.entries()) {
+                const id = internalDocumentId(grounded.manifest.id, document.content_hash, index);
+                const uri = `artifact://${run.runId}/${id}`;
+                sourceRefs.push(uri);
+                this.ledger.appendSupportingArtifact({
+                    id,
+                    runId: run.runId,
+                    type: "ContextDocument",
+                    schemaVersion: "1.0",
+                    producer: "controller",
+                    sourceRefs: [document.ref],
+                    body: {
+                        schemaVersion: "1.0",
+                        id,
+                        runId: run.runId,
+                        repositoryRef: document.ref,
+                        contentHash: document.content_hash,
+                        sizeBytes: document.size_bytes,
+                        trustKind: isInstructionPath(document.path)
+                            ? "applicable_instruction"
+                            : "untrusted_repository_content",
+                        instructionScope: isInstructionPath(document.path)
+                            ? document.path.includes("/")
+                                ? document.path.slice(0, document.path.lastIndexOf("/"))
+                                : "."
+                            : null,
+                        content: document.content,
+                    },
+                }, {
+                    actor: "controller",
+                    eventType: "context_source_stored",
+                    inputRefs: [document.ref],
+                    decisionSummary: `Stored selected source ${document.ref} once in the content-addressed artifact store.`,
+                });
+            }
+            manifest = normalizeContextManifestWire({
+                ...grounded.manifest,
+                derived_refs: sourceRefs,
+            });
+        }
+        const groundingAction = this.controller.getNextAction(run.runId);
+        if (groundingAction.kind === "phase") {
+            sourceRefs = [
+                ...new Set([...groundingAction.inputRefs, ...sourceRefs]),
+            ].slice(0, MAX_TRACE_INPUT_REFS);
+        }
+        const result = this.controller.submitArtifact({
+            id: manifest.id,
+            runId: run.runId,
+            type: "ContextManifest",
+            schemaVersion: "1.0",
+            producer: "controller",
+            sourceRefs,
+            body: manifest,
+        });
+        this.publishActiveSession(result.run, result.nextAction);
+        return { ...result, manifest };
+    }
+    submitArtifact(input) {
+        if (input.type === "RunEnvelope" ||
+            input.type === "ContextManifest" ||
+            input.type === "NextAction" ||
+            input.type === "TraceEvent") {
+            throw new Error(`${input.type} is controller-owned and cannot be submitted by a host role`);
+        }
+        if (input.type === "Evidence") {
+            const run = this.ledger.requireRun(input.runId);
+            if (run.status !== "running" || run.phase !== "agent_4_execute") {
+                throw new Error("Evidence may be captured only during the bounded executor phase");
+            }
+            const body = parseArtifactBody("Evidence", input.body);
+            if (input.producer !== "executor" ||
+                input.id !== body.id ||
+                input.runId !== body.runId ||
+                input.schemaVersion !== body.schemaVersion) {
+                throw new Error("Evidence metadata or producer does not match its body");
+            }
+            const sourceRefs = traceInputRefs(this.ledger, input.runId, body, input.sourceRefs);
+            const decodedContent = evidenceContentForSecretScan(body.encoding, body.content);
+            if (containsLikelySecretInValue(body) ||
+                containsLikelySecret(decodedContent) ||
+                containsLikelySecretInValue(sourceRefs)) {
+                throw new Error("Evidence contains a likely credential; redact the value before submission");
+            }
+            this.controller.assertArtifactReferences({ ...input, body, sourceRefs });
+            for (const sourceRef of body.sourceRefs) {
+                if (!sourceRef.startsWith("artifact://"))
+                    continue;
+                const match = /^artifact:\/\/([^/]+)\/([^/]+)$/.exec(sourceRef);
+                if (!match ||
+                    match[1] !== input.runId ||
+                    !this.ledger.getArtifact(input.runId, match[2])) {
+                    throw new Error(`Evidence source reference is missing or belongs to another run: ${sourceRef}`);
+                }
+            }
+            const stored = this.ledger.appendSupportingArtifact({ ...input, body, sourceRefs }, {
+                actor: "executor",
+                eventType: "evidence_captured",
+                inputRefs: sourceRefs,
+                decisionSummary: `Captured a redacted ${body.kind} evidence artifact.`,
+            }, {
+                scope: "after_latest",
+                anchorType: "WorkPlan",
+                maximum: MAX_EVIDENCE_PER_WORK_PLAN,
+                errorMessage: `Evidence quota of ${String(MAX_EVIDENCE_PER_WORK_PLAN)} per WorkPlan reached`,
+            });
+            return {
+                run,
+                artifact: stored,
+                nextAction: this.controller.getNextAction(input.runId),
+            };
+        }
+        if (input.type === "ScenarioSpec") {
+            const run = this.ledger.requireRun(input.runId);
+            if (run.status !== "running" || run.phase !== "agent_2_compile") {
+                throw new Error("Optional ScenarioSpec must immediately follow its accepted ProblemFrame");
+            }
+            const body = parseArtifactBody("ScenarioSpec", input.body);
+            if (input.producer !== "scenario_author" ||
+                input.id !== body.id ||
+                input.runId !== body.runId ||
+                input.schemaVersion !== body.schemaVersion) {
+                throw new Error("ScenarioSpec metadata or producer does not match its body");
+            }
+            const sourceRefs = traceInputRefs(this.ledger, input.runId, body, input.sourceRefs);
+            this.controller.assertArtifactReferences({ ...input, body, sourceRefs });
+            const match = /^artifact:\/\/([^/]+)\/([^/]+)$/.exec(body.problemFrameRef);
+            if (!match ||
+                match[1] !== input.runId ||
+                !this.ledger.getArtifact(input.runId, match[2])) {
+                throw new Error("ScenarioSpec must reference an existing ProblemFrame in the same run");
+            }
+            const stored = this.ledger.appendSupportingArtifact({ ...input, body, sourceRefs }, {
+                actor: input.producer,
+                eventType: "scenario_presentation_stored",
+                inputRefs: sourceRefs,
+                decisionSummary: "Stored an optional sourced scenario presentation; the ProblemFrame remains authoritative.",
+            }, {
+                scope: "matching_body_field",
+                field: "problemFrameRef",
+                value: body.problemFrameRef,
+                maximum: MAX_SCENARIO_SPECS_PER_FRAME,
+                errorMessage: "Only one ScenarioSpec may be stored for the current ProblemFrame",
+            });
+            return {
+                run,
+                artifact: stored,
+                nextAction: this.controller.getNextAction(input.runId),
+            };
+        }
+        if (!isArtifactType(input.type)) {
+            throw new Error(`Unsupported artifact type: ${input.type}`);
+        }
+        const body = parseArtifactBody(input.type, input.body);
+        const submitted = this.controller.submitArtifact({
+            ...input,
+            body,
+            sourceRefs: traceInputRefs(this.ledger, input.runId, body, input.sourceRefs),
+        });
+        this.publishActiveSession(submitted.run, submitted.nextAction);
+        return submitted;
+    }
+    answerClarification(runId, response) {
+        const answered = this.controller.answerClarification(runId, response);
+        this.publishActiveSession(answered.run, answered.nextAction);
+        return answered;
+    }
+    cancelRun(runId, actionId, expectedRunVersion) {
+        this.assertActionToken(runId, actionId, expectedRunVersion);
+        const run = this.controller.cancelRun(runId);
+        const nextAction = this.controller.getNextAction(runId);
+        this.publishActiveSession(run, nextAction);
+        return { run, nextAction };
+    }
+    listRuns(limit = 20) {
+        if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+            throw new Error("Run list limit must be an integer from 1 to 100");
+        }
+        return this.ledger
+            .listRuns(limit)
+            .map(({ runId, schemaVersion, requestedMode, topology, status, phase, resumePhase, version, outcomeHint, createdAt, updatedAt, }) => ({
+            runId,
+            schemaVersion,
+            requestedMode,
+            topology,
+            status,
+            phase,
+            resumePhase,
+            version,
+            outcomeHint,
+            createdAt,
+            updatedAt,
+        }));
+    }
+    getRun(runId) {
+        const run = this.ledger.requireRun(runId);
+        return {
+            run,
+            artifacts: this.ledger.listArtifacts(runId),
+            nextAction: this.controller.getNextAction(runId),
+        };
+    }
+    getArtifact(runId, artifactId) {
+        const artifact = this.ledger.getArtifact(runId, artifactId);
+        if (!artifact)
+            throw new Error(`Artifact not found: ${artifactId}`);
+        return artifact;
+    }
+    checkToolAction(input) {
+        this.assertActionToken(input.runId, input.actionId, input.expectedRunVersion);
+        const run = this.ledger.requireRun(input.runId);
+        const envelopeRecord = this.ledger.findLatestArtifact(input.runId, "RunEnvelope");
+        const envelopeBody = envelopeRecord
+            ? this.ledger.getArtifact(input.runId, envelopeRecord.id)?.body
+            : null;
+        const envelopeRef = envelopeRecord
+            ? "artifact://" + input.runId + "/" + envelopeRecord.id
+            : null;
+        const decision = evaluateBrokerAction({
+            repositoryRoot: run.repositoryRoot,
+            mode: run.requestedMode,
+            permissions: permissionsFromEnvelope(run.requestedMode, envelopeBody),
+            ...(envelopeRef ? { policyRefs: [envelopeRef] } : {}),
+        }, {
+            capability: input.capability,
+            ...(input.target !== undefined ? { target: input.target } : {}),
+            runId: input.runId,
+            actionId: input.actionId,
+        });
+        this.ledger.appendTraceEvent(input.runId, {
+            actor: "host",
+            eventType: "broker_decision",
+            phase: run.phase,
+            inputRefs: envelopeRef ? [envelopeRef] : [],
+            permissionDecision: decision.permissionDecision,
+            decisionSummary: decision.allowed
+                ? "Broker allowed " + input.capability + "."
+                : "Broker denied " +
+                    input.capability +
+                    ": " +
+                    decision.reasonCode +
+                    ".",
+        });
+        return decision;
+    }
+    replayRun(runId) {
+        const run = this.ledger.requireRun(runId);
+        return inspectRunReplay(this.ledger, run);
+    }
+    getTrace(runId, afterSequence = 0, limit = 10_000) {
+        this.ledger.requireRun(runId);
+        return this.ledger.listTrace(runId, afterSequence, limit).map((event) => parseArtifactBody("TraceEvent", {
+            schemaVersion: "1.0",
+            id: event.id,
+            runId: event.runId,
+            sequence: event.sequence,
+            timestamp: event.timestamp,
+            actor: traceActors.has(event.actor)
+                ? event.actor
+                : "host",
+            phase: tracePhase[event.phase],
+            eventType: canonicalTraceEventType[event.eventType] ?? "artifact_recorded",
+            inputRefs: event.inputRefs,
+            outputRefs: event.outputRefs,
+            tool: null,
+            permissionDecision: event.permissionDecision,
+            budgetSnapshot: {
+                promptRevisions: event.budgetSnapshot.promptRevisionsRemaining,
+                postExecutionRemediations: event.budgetSnapshot.postExecutionRemediationsRemaining,
+                transportRetries: 0,
+            },
+            rationaleSummary: event.decisionSummary,
+            redactions: [],
+        }));
+    }
+}
+//# sourceMappingURL=service.js.map

@@ -11,12 +11,12 @@ import {
 import {
   runBlockedWorkers,
   type BlockedWorkerResult,
-} from "../../../test/helpers/blocked-sqlite-workers.js";
+} from "../../core/src/testing/blocked-sqlite-workers.js";
 import { TelicService } from "./service.js";
 
 const services: TelicService[] = [];
 const supportingWorkerUrl = new URL(
-  "../../../test/helpers/supporting-artifact-worker.ts",
+  "../../core/src/testing/supporting-artifact-worker.ts",
   import.meta.url,
 );
 

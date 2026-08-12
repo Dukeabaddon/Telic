@@ -10,13 +10,13 @@ Telic is an executable, local source preview. It is suitable for development and
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Protocol        | Strict Zod v4 schemas for controller, intent, serial execution, evidence, release, and trace artifacts; canonical bodies use camelCase and `schemaVersion: "1.0"`        |
 | Controller      | Deterministic phase ordering, stage-aware verification preflight, one user-facing clarification, one contract revision, one shared remediation, and terminal reports     |
-| Topology (CAGT) | `micro`, `standard`, and `forensic` classification at `startRun`; EGEL promotes insufficient micro evidence to standard instead of terminal block               |
-| Tool broker       | `telic_check_tool_action` plus preview `telic broker-gate` hooks for Cursor, Cline, and Roo; host-native calls outside MCP remain unintercepted              |
-| Forensic replay   | `telic replay` CLI and `telic_replay_run` MCP inspector with digest verification; micro topology returns a degraded replay flag                               |
+| Topology (CAGT) | `micro`, `standard`, and `forensic` classification at `startRun`; EGEL promotes insufficient micro evidence to standard instead of terminal block                        |
+| Tool broker     | `telic_check_tool_action` plus preview `telic broker-gate` hooks for Cursor, Cline, and Roo; host-native calls outside MCP remain unintercepted                          |
+| Forensic replay | `telic replay` CLI and `telic_replay_run` MCP inspector with digest verification; micro topology returns a degraded replay flag                                          |
 | Persistence     | SQLite metadata/events plus immutable SHA-256-addressed JSON bodies; digest verification occurs on read                                                                  |
 | Context         | Bounded inventory; token-boundary path ranking; eight-file zero-score fallback cap; relevance/file/byte budgets; path, symlink, duplicate, and heuristic secret controls |
-| MCP             | Local STDIO server with eleven tools plus a host-neutral `telic_workflow` prompt                                                                                           |
-| CLI             | npm-packaged and source-built `doctor`, `status`, `trace`, `artifact`, `replay`, `broker-gate`, and `mcp` commands                                                                                |
+| MCP             | Local STDIO server with eleven tools plus a host-neutral `telic_workflow` prompt                                                                                         |
+| CLI             | npm-packaged and source-built `doctor`, `status`, `trace`, `artifact`, `replay`, `broker-gate`, and `mcp` commands                                                       |
 | Host package    | Codex reference plugin plus seven experimental source packs generated from one canonical skill and MCP bundle                                                            |
 | Model access    | None in the runtime; the active host model authors semantic artifacts                                                                                                    |
 | Network service | None required; normal transport is local STDIO                                                                                                                           |

@@ -11,7 +11,7 @@ Telic is an executable, local source preview. It is suitable for development and
 | Protocol        | Strict Zod v4 schemas for controller, intent, serial execution, evidence, release, and trace artifacts; canonical bodies use camelCase and `schemaVersion: "1.0"`        |
 | Controller      | Deterministic phase ordering, stage-aware verification preflight, one user-facing clarification, one contract revision, one shared remediation, and terminal reports     |
 | Topology (CAGT) | `micro`, `standard`, and `forensic` classification at `startRun`; EGEL promotes insufficient micro evidence to standard instead of terminal block               |
-| Tool broker       | `telic_check_tool_action` plus preview `telic broker-gate` hooks for Cursor, Cline, and Roo; host-native calls outside MCP remain unintercepted              |
+| Tool broker       | `telic_check_tool_action` plus preview `telic broker-gate` hooks for Cursor, Cline, and Roo (`TELIC_BROKER_STRICT=1` by default in hooks); host-native calls outside MCP remain unintercepted |
 | Forensic replay   | `telic replay` CLI and `telic_replay_run` MCP inspector with digest verification; micro topology returns a degraded replay flag                               |
 | Persistence     | SQLite metadata/events plus immutable SHA-256-addressed JSON bodies; digest verification occurs on read                                                                  |
 | Context         | Bounded inventory; token-boundary path ranking; eight-file zero-score fallback cap; relevance/file/byte budgets; path, symlink, duplicate, and heuristic secret controls |
@@ -52,7 +52,7 @@ Current controls include strict schemas, bounded inputs, missing-reference rejec
 
 Important limits:
 
-- **Host-native actions are mostly not intercepted.** If a host uses its own shell, editor, browser, or repository tool directly, Telic is not in that call path unless preview broker-gate hooks are installed (Cursor, Cline, Roo). Even then, prevention still depends on host sandboxing, approvals, and adapter compliance.
+- **Host-native actions are mostly not intercepted.** If a host uses its own shell, editor, browser, or repository tool directly, Telic is not in that call path unless preview broker-gate hooks are installed (Cursor, Cline, Roo). With hooks enabled, strict mode denies mapped mutating tools when Telic cannot evaluate an active run. Set `TELIC_BROKER_PERMISSIVE=1` only for local development. Prevention still depends on host sandboxing, approvals, and adapter compliance.
 - **Same-user state is not an adversarial vault.** SHA-256 and SQLite consistency detect ordinary corruption and mismatches. A malicious process with the same OS account and filesystem access may be able to replace metadata and blobs together. Use OS permissions and an isolated account/workspace for stronger separation.
 - **Secret scanning is heuristic.** It can miss uncommon credentials and can exclude harmless text. Do not ground repositories containing secrets you are unwilling to store locally, and do not treat the context selector as a dedicated secret scanner.
 - **Exact local artifacts may be sensitive.** Selected source and submitted evidence are stored exactly in the content-addressed store. Hashing is identity/integrity metadata, not anonymization.
@@ -99,3 +99,4 @@ automated CI suite. Native Windows and WSL are not in the current test matrix.
 5. Complete the dependency and security review, then publish a monitored
    vulnerability-reporting channel.
 6. Publish a pinned artifact and record its checksum and repository URL.
+

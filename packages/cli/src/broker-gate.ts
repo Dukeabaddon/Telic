@@ -27,6 +27,24 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+export function isBrokerStrict(): boolean {
+  if (process.env.TELIC_BROKER_PERMISSIVE === "1") {
+    return false;
+  }
+  return process.env.TELIC_BROKER_STRICT === "1";
+}
+
+function denyStrict(
+  userMessage: string,
+  agentMessage: string,
+): HookPermissionResponse {
+  return {
+    permission: "deny",
+    user_message: userMessage,
+    agent_message: agentMessage,
+  };
+}
+
 export function mapHookInputToToolCall(
   hookInput: Record<string, unknown>,
 ): { capability: string; target?: string } | null {
@@ -60,20 +78,36 @@ export function mapHookInputToToolCall(
 export function evaluateBrokerGate(
   request: BrokerGateRequest,
 ): HookPermissionResponse {
+  const strict = isBrokerStrict();
   const repositoryRoot = realpathSync(resolve(request.repositoryRoot));
   const stateDirectory = process.env.TELIC_STATE_DIR
     ? resolve(process.env.TELIC_STATE_DIR)
     : defaultStateDirectory(repositoryRoot);
-  const session = readActiveSession(stateDirectory);
-  if (!session || session.repositoryRoot !== repositoryRoot) {
-    return { permission: "allow" };
-  }
-  if (!existsSync(resolve(stateDirectory, "ledger.sqlite3"))) {
-    return { permission: "allow" };
-  }
   const mapped = mapHookInputToToolCall(request.hookInput);
+  const session = readActiveSession(stateDirectory);
+
   if (!mapped) {
     return { permission: "allow" };
+  }
+
+  if (!session || session.repositoryRoot !== repositoryRoot) {
+    if (!strict) {
+      return { permission: "allow" };
+    }
+    return denyStrict(
+      "Telic broker is in strict mode but no active Telic session matches this repository.",
+      "Start or resume a Telic run before mutating tools, or set TELIC_BROKER_PERMISSIVE=1 for local development only.",
+    );
+  }
+
+  if (!existsSync(resolve(stateDirectory, "ledger.sqlite3"))) {
+    if (!strict) {
+      return { permission: "allow" };
+    }
+    return denyStrict(
+      "Telic broker is in strict mode but no ledger exists for this repository.",
+      "Run telic doctor and ensure Telic state is initialized before mutating tools.",
+    );
   }
 
   const ledger = new SqliteLedger(stateDirectory);
@@ -84,7 +118,13 @@ export function evaluateBrokerGate(
       run.status !== "running" ||
       run.version !== session.runVersion
     ) {
-      return { permission: "allow" };
+      if (!strict) {
+        return { permission: "allow" };
+      }
+      return denyStrict(
+        "Telic broker is in strict mode but the active session run is not running.",
+        "Resume or start a Telic run before mutating tools, or set TELIC_BROKER_PERMISSIVE=1 for local development only.",
+      );
     }
     const envelopeRecord = ledger.findLatestArtifact(
       session.runId,

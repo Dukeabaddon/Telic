@@ -66,7 +66,7 @@ Telic gives the coding agent a workflow spine. It does not replace the agent.
 | Bundle             | esbuild                                | 0.28.1          |
 | Tests              | Vitest + `@vitest/coverage-v8`         | 4.1.10          |
 | Format             | Prettier                               | 3.9.5           |
-| npm package        | `telic-mcp`                            | 0.1.1           |
+| npm package        | `telic-mcp`                            | 0.2.0           |
 | Website            | Next.js + React                        | 16.2.x / 19.2.x |
 | Site styling       | Tailwind CSS                           | 4.3.x           |
 

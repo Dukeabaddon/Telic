@@ -17,7 +17,7 @@ describe("public release assets", () => {
   it("keeps the npm package and Codex plugin on the same release version", () => {
     const npmPackage = json("packages/telic/package.json");
     const plugin = json("plugins/telic/.codex-plugin/plugin.json");
-    expect(npmPackage.version).toBe("0.1.1");
+    expect(npmPackage.version).toBe("0.2.0");
     expect(plugin.version).toBe(npmPackage.version);
   });
 

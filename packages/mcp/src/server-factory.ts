@@ -601,7 +601,7 @@ function registerTools(server: McpServer, service: TelicService): void {
 }
 
 export function createTelicMcpServer(service: TelicService): McpServer {
-  const server = new McpServer({ name: "telic", version: "0.1.1" });
+  const server = new McpServer({ name: "telic", version: "0.2.0" });
   registerPrompts(server);
   registerTools(server, service);
   return server;

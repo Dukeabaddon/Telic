@@ -1,6 +1,6 @@
 {
   "name": "telic",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Compile coding requests into permission-bounded, evidence-linked workflows with a local artifact ledger.",
   "author": {
     "name": "Telic contributors"

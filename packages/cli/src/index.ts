@@ -33,7 +33,7 @@ export function supportsRequiredNodeVersion(version: string): boolean {
 
 function usage(): string {
   return [
-    "Telic 0.1.1",
+    "Telic 0.2.0",
     "",
     "Usage:",
     "  telic doctor [--repo PATH] [--json]",

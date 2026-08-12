@@ -20,6 +20,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    testTimeout: 15_000,
     include: [
       "packages/**/*.test.ts",
       "test/**/*.test.ts",
@@ -45,3 +46,4 @@ export default defineConfig({
     },
   },
 });
+

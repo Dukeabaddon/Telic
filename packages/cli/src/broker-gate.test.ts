@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { evaluateBrokerGate, isBrokerStrict, mapHookInputToToolCall } from "./broker-gate.js";
+import {
+  evaluateBrokerGate,
+  isBrokerStrict,
+  mapHookInputToToolCall,
+} from "./broker-gate.js";
 
 const writeHook = {
   tool_name: "Write",

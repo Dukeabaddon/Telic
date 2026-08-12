@@ -371,4 +371,3 @@ reproducible, non-sensitive defects.
 ## License
 
 Telic is released under the [MIT License](LICENSE).
-

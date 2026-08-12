@@ -361,6 +361,7 @@ See [Contributing](CONTRIBUTING.md) for the artifact-first workflow.
 - [API reference](docs/API.md)
 - [Adapter setup](docs/ADAPTERS.md)
 - [Current status](docs/STATUS.md)
+- [Production gate](docs/PRODUCTION_GATE.md)
 - [Security](SECURITY.md)
 - [Privacy](PRIVACY.md)
 

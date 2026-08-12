@@ -1,5 +1,7 @@
 import {
   authorizeAction,
+  emptyPermissionSet,
+  intersectStructuredPermissions,
   normalizeNetworkReadDomain,
   policyForMode,
   policyFromPermissionSet,
@@ -41,68 +43,6 @@ export interface BrokerContext {
   mode: IntentMode;
   permissions: StructuredPermissionSet;
   policyRefs?: string[];
-}
-
-function emptyPermissionSet(): StructuredPermissionSet {
-  return {
-    repository: { read: [], write: [], delete: [] },
-    shell: { inspect: false, executeAllowlist: [] },
-    runtime: { inspect: [], restart: [] },
-    browser: { inspect: false, mutateState: false },
-    network: { readDomains: [], externalWrite: false },
-    subagents: { spawn: false, maximumChildren: 0, maximumDepth: 0 },
-  };
-}
-
-function intersectStructuredPermissions(
-  projection: ReturnType<typeof projectPermissions>,
-  granted: StructuredPermissionSet,
-  denied: StructuredPermissionSet,
-): StructuredPermissionSet {
-  const effective = emptyPermissionSet();
-  if (projection.repository_read && denied.repository.read.length === 0) {
-    effective.repository.read = [...granted.repository.read];
-  }
-  if (projection.repository_write && denied.repository.write.length === 0) {
-    effective.repository.write = [...granted.repository.write];
-  }
-  if (projection.repository_delete && denied.repository.delete.length === 0) {
-    effective.repository.delete = [...granted.repository.delete];
-  }
-  if (projection.shell_execute && denied.shell.executeAllowlist.length === 0) {
-    effective.shell.executeAllowlist = [...granted.shell.executeAllowlist];
-  }
-  effective.shell.inspect =
-    projection.shell_inspect && granted.shell.inspect && !denied.shell.inspect;
-  if (projection.runtime_inspect && denied.runtime.inspect.length === 0) {
-    effective.runtime.inspect = [...granted.runtime.inspect];
-  }
-  if (projection.runtime_mutate && denied.runtime.restart.length === 0) {
-    effective.runtime.restart = [...granted.runtime.restart];
-  }
-  effective.browser.inspect =
-    projection.browser_inspect &&
-    granted.browser.inspect &&
-    !denied.browser.inspect;
-  effective.browser.mutateState =
-    projection.browser_mutate &&
-    granted.browser.mutateState &&
-    !denied.browser.mutateState;
-  if (projection.network_read && denied.network.readDomains.length === 0) {
-    effective.network.readDomains = [...granted.network.readDomains];
-  }
-  effective.network.externalWrite =
-    projection.external_write &&
-    granted.network.externalWrite &&
-    !denied.network.externalWrite;
-  if (
-    projection.subagent_spawn &&
-    granted.subagents.spawn &&
-    !denied.subagents.spawn
-  ) {
-    effective.subagents = { ...granted.subagents };
-  }
-  return effective;
 }
 
 /** Derive effective permissions from a RunEnvelope authorization block. */

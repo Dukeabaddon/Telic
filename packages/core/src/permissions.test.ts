@@ -6,6 +6,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   authorizeAction,
+  emptyPermissionSet,
+  intersectStructuredPermissions,
   permissionSetIsSubset,
   policyForMode,
   projectPermissions,
@@ -229,5 +231,48 @@ describe("permission intersection", () => {
           .allowed,
       ).toBe(false);
     }
+  });
+});
+
+describe("intersectStructuredPermissions", () => {
+  it("returns empty when mode projection denies repository write", () => {
+    const projection = projectPermissions("analyze_only");
+    const granted = emptyPermissionSet();
+    granted.repository.write = ["**"];
+    const effective = intersectStructuredPermissions(
+      projection,
+      granted,
+      emptyPermissionSet(),
+    );
+    expect(effective.repository.write).toEqual([]);
+  });
+
+  it("drops granted scopes when denied lists are non-empty", () => {
+    const projection = projectPermissions("analyze_and_fix");
+    const granted = emptyPermissionSet();
+    granted.repository.read = ["src/**"];
+    const denied = emptyPermissionSet();
+    denied.repository.read = ["infra/**"];
+    const effective = intersectStructuredPermissions(
+      projection,
+      granted,
+      denied,
+    );
+    expect(effective.repository.read).toEqual([]);
+  });
+
+  it("preserves subagent limits only when spawn is allowed and not denied", () => {
+    const projection = projectPermissions("analyze_and_fix");
+    const granted = emptyPermissionSet();
+    granted.subagents = { spawn: true, maximumChildren: 3, maximumDepth: 1 };
+    const denied = emptyPermissionSet();
+    denied.subagents.spawn = true;
+    expect(
+      intersectStructuredPermissions(projection, granted, denied).subagents,
+    ).toEqual(emptyPermissionSet().subagents);
+    expect(
+      intersectStructuredPermissions(projection, granted, emptyPermissionSet())
+        .subagents,
+    ).toEqual(granted.subagents);
   });
 });
